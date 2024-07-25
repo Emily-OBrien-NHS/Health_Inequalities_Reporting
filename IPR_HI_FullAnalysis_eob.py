@@ -8,21 +8,33 @@ from scipy.stats import mannwhitneyu
 from matplotlib.ticker import PercentFormatter
 import matplotlib.dates as mdates
 import scipy.stats.distributions as dist
+import datetime as dt
+import itertools
+from dateutil.relativedelta import relativedelta
+from pptx import Presentation
+from pptx.util import Inches, Pt
+import time
 import os
-os.chdir('C:/Users/obriene/Projects/Health Inequalities Reporting/plots')
+os.chdir('C:/Users/obriene/Projects/Health Inequalities Reporting')
 
-#Set the end date for the OP virtual access section. Gets data from one
-#calendar year prior to this date
-op_end_date = '31-MAY-2024 23:59:59'
+#Get the current month and year for outputs
+current_day = dt.datetime.today()
+version_date = f'{current_day.strftime("%b")} {current_day.year}'
+#Get date of last day of previous month for sql queries
+end_date = (current_day.replace(day=1)
+            - dt.timedelta(days=1))
+start_date = end_date - relativedelta(years=1)
+op_end_date = f'{end_date.strftime('%d-%B-%Y').upper()} 23:59:59'
 
 # =============================================================================
 # % Get data from queries
-# =============================================================================      
+# ============================================================================= 
+t0 = time.time()     
 sdmart_engine = create_engine('mssql+pyodbc://@SDMartDataLive2/InfoDB?'\
                               'trusted_connection=yes&driver=ODBC+Driver+17'\
                               '+for+SQL+Server')
 print('Reading in data...')
-print('starting clock stops query')
+print('Clock Stops query running...')
 # RTT Clock stops - Data Retrieval and formatting
 query = f"""
 DECLARE                       @StartDate AS DATETIME
@@ -94,12 +106,12 @@ AND rtt_adm.disch_outcome <> 'Died'
 AND imd.EndDate IS NULL
 """
 rtt_cs = pd.read_sql(query, sdmart_engine)
-print('rtt clock stops query complete')
+print('Clock Stops query complete')
 #Get IMD deciles 1&2 and all others. Also don't include NaN days wait
 rtt_cs['Decile '] = rtt_cs['Decile '].astype(float)
 
 # RTT WL - Data Retrieval
-print('starting rtt wait list query')
+print('RTT Wait List query running...')
 wl_query = """
 --Will return current RTT incomplete waiting list position
 SELECT imd.[IndexValue] AS 'Decile ', RTT.current_LOW, eth.[description],
@@ -123,12 +135,12 @@ FROM [InfoDB].[dbo].[rtt_daily_incomplete_pathways_snapshot])
 AND imd.EndDate IS NULL
 """
 rtt_incomp = pd.read_sql(wl_query, sdmart_engine)
-print('rtt wait list query complete') 
+print('RTT Wait List query complete') 
 #Make Decile column numeric
 rtt_incomp['Decile '] = rtt_incomp['Decile '].astype(float)
 
 # Non-F2F Section Data retrieval
-print('running op query')
+print('OP query running...')
 op_query = f"""
 DECLARE                       @dtmStartDate AS DATETIME
 DECLARE                       @dtmEnddate AS DATETIME
@@ -172,19 +184,11 @@ AND spec.pfmgt_spec <> 'ZZ' -- remove non UHP activity
 AND imd.EndDate IS NULL
 """
 op_data = pd.read_sql(op_query, sdmart_engine)
-print('op query complete')
+print('OP query complete')
 op_data['IndexValue'] = op_data['IndexValue'].astype(float)
-
-# % Analyse data as a whole before going to specialty level
-# % RTT Clock Stops Analysis Section
-#Get cs for given specialty
-rtt_slc = rtt_cs.copy()
-#Print the median and mean LoW
-medianLoW = rtt_slc['days_wait'].median()
-meanLoW = rtt_slc['days_wait'].mean()
-print('Overall median length of wait: ' + str(round(medianLoW)) + ' days\n'\
-      'Overall mean length of wait: ' + str(round(meanLoW)) + ' days')
-
+#print timings
+t1 = time.time()
+print(f'Queries run in {(t1-t0)/60} mins')
 # =============================================================================
 # % Functions
 # =============================================================================
@@ -299,28 +303,18 @@ def counts_list(counts, options):
 # % RTT Clock Stops Analysis Section
 #Get cs for given specialty
 rtt_slc = rtt_cs.copy()
-#Print the median and mean LoW
-medianLoW = rtt_slc['days_wait'].median()
-meanLoW = rtt_slc['days_wait'].mean()
-print('Overall median length of wait: ' + str(round(medianLoW)) + ' days\n'\
-      'Overall mean length of wait: ' + str(round(meanLoW)) + ' days')
-
 #Get IMD deciles 1&2 and all others. Also don't include NaN days wait
 imd_1_2 = rtt_slc.loc[(rtt_slc['Decile '].isin([1,2]))
                       & (~pd.isnull(rtt_slc['days_wait']))].copy()
 imd_3_10 = rtt_slc.loc[(~rtt_slc['Decile '].isin([1,2]))
                        & (~pd.isnull(rtt_slc['days_wait']))
                        & (~pd.isnull(rtt_slc['Decile ']))].copy()
-
 #Get minority ethnicities and non
 me = rtt_slc.loc[(~rtt_slc['description'].isin(
                   ['Unknown', 'Unwilling to answer', 'White British']))
                  & (~pd.isnull(rtt_slc['days_wait']))].copy()
 wb = rtt_slc.loc[(rtt_slc['description'] == 'White British')
                  & (~pd.isnull(rtt_slc['days_wait']))].copy()
-
-#Find the number of clock stops for each category
-print('Overall number of clock stops: '+str(rtt_slc.shape[0]))
 #Find median length of wait for each of these populations
 me_med_low = me['days_wait'].median()
 wb_med_low = wb['days_wait'].median()
@@ -337,7 +331,6 @@ pval_rtt_cs_IMD = mannwhitneyu(imd_1_2['days_wait'].tolist(),
 pval_rtt_cs_eth = mannwhitneyu(me['days_wait'].tolist(),
                                wb['days_wait'].tolist(),
                                alternative = 'greater')[1]
-
 #Plot bar chart
 fig,ax = plt.subplots(1,1)
 ax.bar([1, 2, 3, 4],
@@ -346,9 +339,9 @@ ax.bar([1, 2, 3, 4],
        edgecolor='black')
 ax.set_xticks([1,2,3,4])
 ax.set_xticklabels(['Ethnic\n Minority\n('+f"{me.shape[0]:,.0f}"+' clock \nstops)',
-                    'White British\n('+f"{wb.shape[0]:,.0f}"+' \nclock stops)',
-                    'IMD 1-2\n('+f"{imd_1_2.shape[0]:,.0f}"+'\n clock stops)',
-                    'IMD 3-10\n('+f"{imd_3_10.shape[0]:,.0f}"+'\n clock stops)'])
+                'White British\n('+f"{wb.shape[0]:,.0f}"+' \nclock stops)',
+                'IMD 1-2\n('+f"{imd_1_2.shape[0]:,.0f}"+'\n clock stops)',
+                'IMD 3-10\n('+f"{imd_3_10.shape[0]:,.0f}"+'\n clock stops)'])
 ax.set_ylabel('Median LoW (Days)')
 ax.set_title('Median Length of Wait for RTT')
 show_values_on_bars(ax, percentage = False)
@@ -372,7 +365,7 @@ else:
                  [1,2,3,4],
                  [me_med_low,wb_med_low,imd_1_2_med_low,imd_3_10_med_low])
 plt.ylim(ymax=ax.get_ylim()[1]*1.4)
-plt.savefig('Slide 2.png', bbox_inches='tight')
+plt.savefig('plots/Slide 2.png', bbox_inches='tight')
 
 # =============================================================================
 # # ETHNICITY SLC RTT MEDIAN LOW - statistical tests SLIDE 3
@@ -409,12 +402,13 @@ RTT_LOW_eth_pvals['WB-ME'] = (RTT_LOW_eth_pvals['Median LoW WB']
                               - RTT_LOW_eth_pvals['Median LoW ME'])
 
 #Filter to statistically significant
-rtt_low_eth_slc_plt = pd.melt(RTT_LOW_eth_pvals.loc[RTT_LOW_eth_pvals['p-value']<0.025],
+rtt_low_eth_slc_plt = pd.melt(RTT_LOW_eth_pvals.loc[RTT_LOW_eth_pvals['p-value']
+                                                    <0.025],
                               id_vars=['SLC'],
                               value_vars = ['Median LoW ME', 'Median LoW WB'])
 
 #Plot
-fig, ax_spec_eth = plt.subplots(1, 1, figsize = (11,4))
+fig, ax_spec_eth = plt.subplots(1, 1, figsize = (9,4))
 sns.barplot(data=rtt_low_eth_slc_plt, x='SLC', hue = 'variable', y='value',
             ax=ax_spec_eth, palette=['royalblue','lightskyblue'])
 legend = ax_spec_eth.get_legend()
@@ -424,9 +418,9 @@ ax_spec_eth.legend(handles, ['Ethnic Minority', 'White British'],
                    bbox_to_anchor = (1,1))
 ax_spec_eth.set_ylabel('Median LoW (days)')
 ax_spec_eth.set_xticks(ax_spec_eth.get_xticks())
-labels = [ tw.fill(l, 20) for l in rtt_low_eth_slc_plt.SLC.unique()]
-ax_spec_eth.set_xticklabels(labels = labels)
-plt.savefig('Slide 3.png', bbox_inches='tight')
+labels = [tw.fill(l, 20) for l in rtt_low_eth_slc_plt.SLC.unique()]
+ax_spec_eth.set_xticklabels(labels=labels, fontsize=8)
+plt.savefig('plots/Slide 3.png', bbox_inches='tight')
 
 # =============================================================================
 # #IMD RTT LoW by SLC SLIDE 4
@@ -445,8 +439,9 @@ for slc in slc_unique:
     if ((imd_1_2_spec.shape[0] >= 15) and (imd_3_10_spec.shape[0] >= 15)
         and (imd_1_2_spec['days_wait'].median() != 0)
         and (imd_3_10_spec['days_wait'].median() != 0)):
-        RTT_LOW_IMDSLC_pvals.append(mannwhitneyu(imd_1_2_spec['days_wait'].tolist(),
-                                                 imd_3_10_spec['days_wait'].tolist())[1])
+        RTT_LOW_IMDSLC_pvals.append(
+            mannwhitneyu(imd_1_2_spec['days_wait'].tolist(),
+                         imd_3_10_spec['days_wait'].tolist())[1])
     else:
         RTT_LOW_IMDSLC_pvals.append(np.nan)
     #add median length of stay for each slc
@@ -455,17 +450,15 @@ for slc in slc_unique:
 
 #Make a df of the results
 RTT_LOW_IMDSLC_pvals = pd.DataFrame({'SLC':slc_unique,
-                                     'p-value':RTT_LOW_IMDSLC_pvals,
-                                     'Median LoW IMD 1-2':imd_1_2_med_low_slc,
-                                     'Median LoW IMD 3-10':imd_3_10_med_low_slc})
+                                    'p-value':RTT_LOW_IMDSLC_pvals,
+                                    'Median LoW IMD 1-2':imd_1_2_med_low_slc,
+                                    'Median LoW IMD 3-10':imd_3_10_med_low_slc})
 RTT_LOW_IMDSLC_pvals['IMD1_2-IMD3_10'] = (RTT_LOW_IMDSLC_pvals['Median LoW IMD 1-2']
                                           - RTT_LOW_IMDSLC_pvals['Median LoW IMD 3-10'])
 #Filter to statistically significant
-rtt_low_imd_slc_plt = pd.melt(RTT_LOW_IMDSLC_pvals.loc[RTT_LOW_IMDSLC_pvals['p-value']
-                                                       <0.025],
-                              id_vars=['SLC'],
-                              value_vars = ['Median LoW IMD 1-2',
-                                            'Median LoW IMD 3-10'])
+rtt_low_imd_slc_plt = pd.melt(RTT_LOW_IMDSLC_pvals.loc[
+    RTT_LOW_IMDSLC_pvals['p-value'] < 0.025], id_vars=['SLC'],
+    value_vars = ['Median LoW IMD 1-2', 'Median LoW IMD 3-10'])
 #plot
 fig, ax_spec_imd = plt.subplots(1,1,figsize = (8,4))
 sns.barplot(data=rtt_low_imd_slc_plt, x='SLC', hue='variable', y='value',
@@ -478,14 +471,12 @@ ax_spec_imd.set_ylabel('Median LoW (days)')
 ax_spec_imd.set_xticks(ax_spec_imd.get_xticks())
 labels = [tw.fill(l, 21) for l in rtt_low_imd_slc_plt.SLC.unique()]
 ax_spec_imd.set_xticklabels(labels = labels)
-plt.savefig('Slide 4.png', bbox_inches='tight')
+plt.savefig('plots/Slide 4.png', bbox_inches='tight')
 
 # % RTT Incomplete WL Analysis
-# =============================================================================
+# ========================================================================
 #     #>52 week wait analysis SLIDE 5
 # ========================================================================
-print('Number of patients on RTT WL: ' + str(rtt_incomp.shape[0]))
-
 #############All week waits
 #####IMD
 #Get a version with no NaNs for deciles
@@ -497,9 +488,10 @@ rtt_incomp_dec['type'] = 'IMD'
 #####Ethnicity
 #Get a version without unknown ethnicities
 rtt_incomp_eth = rtt_incomp.loc[~rtt_incomp['description']
-                                    .isin(['Unknown','Unwilling to answer'])].copy()
+                                .isin(['Unknown','Unwilling to answer'])].copy()
 #Add column for white british and ethnic minority split
-rtt_incomp_eth['value'] = np.where(rtt_incomp_eth['description'] == 'White British',
+rtt_incomp_eth['value'] = np.where(rtt_incomp_eth['description']
+                                   == 'White British',
                                    'White British', 'Ethnic Minority')
 rtt_incomp_eth['type'] = 'Ethnicity'
 
@@ -516,9 +508,10 @@ rtt_incomp_52_dec['type'] = 'IMD\n (>52 Week Wait)'
 #Remove unknown ethnicities
 rtt_incomp_52_eth = rtt_incomp.loc[(rtt_incomp['current_LOW'] > 364)
                                    & (~rtt_incomp['description'].isin(
-                                       ['Unknown', 'Unwilling to answer']))].copy()
+                                    ['Unknown', 'Unwilling to answer']))].copy()
 #Add column for white british and ethnic minority split
-rtt_incomp_52_eth['value'] = np.where(rtt_incomp_52_eth['description'] == 'White British',
+rtt_incomp_52_eth['value'] = np.where(rtt_incomp_52_eth['description']
+                                      == 'White British',
                                    'White British', 'Ethnic Minority')
 rtt_incomp_52_eth['type'] = 'Ethnicity \n(>52 Week Wait)'
 
@@ -540,7 +533,8 @@ imd_str = 'a' if pval_rtt_incomp_imd < 0.05 else 'no'
 total_num_eth = rtt_incomp_eth.shape[0]
 total_num_eth_52 = rtt_incomp_52_eth.shape[0]
 n_em = rtt_incomp_eth[rtt_incomp_eth['value'] == 'Ethnic Minority'].shape[0]
-n_em_52 = rtt_incomp_52_eth[rtt_incomp_52_eth['value'] == 'Ethnic Minority'].shape[0]
+n_em_52 = rtt_incomp_52_eth[rtt_incomp_52_eth['value']
+                            == 'Ethnic Minority'].shape[0]
 #test hypothesis
 pval_rtt_incomp_eth = propHypothesisTest((n_em / total_num_eth),
                                          (n_em_52 / total_num_eth_52),
@@ -588,127 +582,24 @@ fig.text(.95, .2,
          ha='center', clip_on=False, fontsize=10,
          bbox=dict(boxstyle='round,pad=0.5', fc='none', ec='black'))
 plt.tight_layout()
-plt.savefig('Slide 5.png', bbox_inches='tight')
+plt.savefig('plots/Slide 5.png', bbox_inches='tight')
 
-
-#BELOW JUST PRINTS STUFF, DO WE NEED TO KEEP?
-
-
-
-# =============================================================================
-# #Testing specialty-level difference in RTT WL proportions for IMD and ethnicity
-# =============================================================================
-#####IMD
-# #Loop through specialties and calculate p-values
-# spec_unique = rtt_incomp_dec['SLC'].unique()
-# spec_52ww_imd_pvals = []
-# for spec in spec_unique:
-#     rtt_incomp_dec_spec = rtt_incomp_dec.loc[rtt_incomp_dec['SLC']
-#                                              == spec].copy()
-#     rtt_incomp_52_dec_spec = rtt_incomp_52_dec.loc[rtt_incomp_52_dec['SLC']
-#                                                    == spec].copy()
-#     total_num = rtt_incomp_dec_spec.shape[0]
-#     n_IMD12 = rtt_incomp_dec_spec.loc[rtt_incomp_dec_spec['value']
-#                                       == 'IMD 1-2'].shape[0]
-#     total_num_52 = rtt_incomp_52_dec_spec.shape[0]
-#     n_IMD12_52 = rtt_incomp_52_dec_spec.loc[rtt_incomp_52_dec_spec['value']
-#                                             == 'IMD 1-2'].shape[0]
-#     if (n_IMD12 >= 10) and (n_IMD12_52 >= 10):
-#         spec_52ww_imd_pvals.append([spec,
-#                                     propHypothesisTest(n_IMD12/total_num,
-#                                                        n_IMD12_52/total_num_52,
-#                                                        n_IMD12, n_IMD12_52,
-#                                                        alpha=0.05)])
-#     else:
-#         spec_52ww_imd_pvals.append([spec, np.nan])
-        
-# #####Ethnicity
-# #Loop through specialties and calculate p-values
-# spec_unique = rtt_incomp_eth['SLC'].unique()
-# spec_52ww_eth_pvals = []
-# for spec in spec_unique:
-#     rtt_incomp_eth_spec = rtt_incomp_eth.loc[rtt_incomp_eth['SLC']==spec].copy()
-#     rtt_incomp_52_eth_spec = rtt_incomp_52_eth.loc[rtt_incomp_52_eth['SLC']
-#                                                    == spec].copy()
-#     total_num = rtt_incomp_eth_spec.shape[0]
-#     n_ME = rtt_incomp_eth_spec.loc[rtt_incomp_eth_spec['value']
-#                                    == 'Ethnic Minority'].shape[0]
-#     total_num_52 = rtt_incomp_52_eth_spec.shape[0]
-#     n_ME_52 = rtt_incomp_52_eth_spec.loc[rtt_incomp_52_eth_spec['value']
-#                                          == 'Ethnic Minority'].shape[0]
-#     if (n_ME >= 10) and (n_ME_52 >= 10):
-#         spec_52ww_eth_pvals.append([spec,
-#                                         propHypothesisTest(n_ME/total_num,
-#                                                            n_ME_52/total_num_52,
-#                                                            n_ME, n_ME_52,
-#                                                            alpha=0.05)])
-#     else:
-#         spec_52ww_eth_pvals.append([spec, np.nan])
-
-# ######Results
-# #Make a dataframe of these results
-# spec_52ww_results = (pd.DataFrame(spec_52ww_eth_pvals,
-#                                  columns=['Specialty', 'Ethnicity'])
-#                     .merge(pd.DataFrame(spec_52ww_imd_pvals,
-#                                         columns=['Specialty', 'IMD']),
-#                            on='Specialty'))
-
-# #If any significant differences, print these. Otherwise, print that none do
-# #First, change columns to numeric
-# if (spec_52ww_results[['Ethnicity','IMD']] < 0.05).any(axis=None):
-# 	print('Significant difference in 52WW for an SLC. See spec_52ww_results')
-# else:
-# 	print('No significant difference in 52WW')
-
-
-
-
-
-
-# =============================================================================
+# ========================================================================
 #     #Digital Access Analysis
 # ========================================================================
 #First, find basic percentages
-overall_nf2f = 100*(op_data.loc[op_data['Visit'] == 'Non-F2F'].shape[0]
-                    / op_data.shape[0])
-total_appts = op_data.shape[0]
 #Find unique patients in each category
-unique_opats = op_data.drop_duplicates(subset=['pasid','Visit'])
-total_pats = op_data.drop_duplicates(subset='pasid').shape[0]
-print('Total appointments: ' + str(total_appts))
-print('Total patients: ' + str(total_pats))
-print('Overall Non-F2F percentage: ' + str(round(overall_nf2f)) + '%')
+unique_opats = op_data.drop_duplicates(subset=['pasid', 'Visit'])
+
 #For both all op data and unique outpatients
 for i,df in enumerate([op_data, unique_opats]):
     #Set title text
     title_text = 'Outpatient Appointments' if i==0 else 'Outpatients'
     hue_order = ['F2F','Non-F2F']
 
-    #DO WE NEED THE BELOW? DOESN'T SEEM TO DO ANYTHING - is this the slide text?
-    # if i == 0:
-    #     #Hypothesis testing for deciles
-    #     #Get all pairs of decile numbers with no repeats
-    #     imd_pvals = []
-    #     pair_list = []
-    #     for r in itertools.combinations(range(0,10),2):
-    #         imd_pvals.append(propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
-    #                                             num_list[r[1]]/tot_list[r[1]],
-    #                                             num_list[r[0]], num_list[r[1]]))
-    #         pair_list.append(r)
-
-    #     #Make a df of the results
-    #     imd_prop_test = pd.DataFrame({'pvals':imd_pvals, 'pairs':pair_list})
-    #     imd_prop_test['result'] = np.where(imd_prop_test['pvals'] > 0.025,
-    #                                  'No Difference', 'Difference')
-    #     imd_list = [j for j in range(1,11)]
-    #     imd_prop_test['imd1'] = imd_prop_test['pairs'].apply(lambda x: imd_list[x[0]])
-    #     imd_prop_test['imd2'] = imd_prop_test['pairs'].apply(lambda x: imd_list[x[1]])
-
-
-
-    # =============================================================================
+    # ======================================================================
     #         #IMD (SLIDES 7-9)
-    # =============================================================================
+    # ======================================================================
     #########Decile (2 category)  SLIDE 7
     #Remove missing data
     op_data_temp_imd = df.loc[~pd.isnull(df['IndexValue'])].copy()
@@ -717,9 +608,10 @@ for i,df in enumerate([op_data, unique_opats]):
                                               'IMD 3-10')
     #Bar plots
     fig1, ax_op_dec2 = plt.subplots(1, 1, figsize = (4,4))
-    sns.histplot(data=op_data_temp_imd.sort_values('value'), x='value', hue="Visit",
-                 hue_order=hue_order, multiple="fill", discrete=True, 
-                 palette=['lemonchiffon','orange'], alpha=1, ax=ax_op_dec2)
+    sns.histplot(data=op_data_temp_imd.sort_values('value'), x='value',
+                 hue="Visit", hue_order=hue_order, multiple="fill",
+                 discrete=True,  palette=['lemonchiffon','orange'], alpha=1,
+                 ax=ax_op_dec2)
     #Make a list of the numbers to include under the percentages
     nonf2f_counts = op_data_temp_imd.loc[op_data_temp_imd['Visit'] == 'Non-F2F',
                                      'value'].value_counts()
@@ -742,12 +634,12 @@ for i,df in enumerate([op_data, unique_opats]):
                                      num_list[1]/tot_list[1],
                                      num_list[0], num_list[1], alpha=0.025)
     #Add bars to show if there is a significant difference
-    text = ('Significant difference' if pval_op_imd < 0.025
+    slide7_text = ('Significant difference' if pval_op_imd < 0.025
             else ' No significant difference')
-    label_diff(ax_op_dec2, 0, 1, text, [0,1], [1,1])
-    plt.savefig(title_text + ' Slide 7.png', bbox_inches='tight')
+    label_diff(ax_op_dec2, 0, 1, slide7_text, [0,1], [1,1])
+    plt.savefig('plots/' + title_text + ' Slide 7.png', bbox_inches='tight')
 
-    # =============================================================================
+    # ======================================================================
     #########IMD 1&2 vs 3-10 non-f2f plots and testing  SLIDE 8
     spec_unique = df['specialty'].unique()
     #Make an empty list to store pvalues in
@@ -808,7 +700,7 @@ for i,df in enumerate([op_data, unique_opats]):
 
     #Add as new column to df
     nf2f_imd2_spec_plt['diffs'] = differences
-    fig, ax_nf2fspec_imd2 = plt.subplots(1, 1, figsize=(10,4))
+    fig, ax_nf2fspec_imd2 = plt.subplots(1, 1, figsize=(9,4))
     sns.barplot(data=nf2f_imd2_spec_plt.sort_values('diffs'), x='Specialty',
                 hue='variable', y='value', ax=ax_nf2fspec_imd2,
                 palette=['seagreen','lightgreen'])
@@ -824,15 +716,16 @@ for i,df in enumerate([op_data, unique_opats]):
         ax_nf2fspec_imd2.set_ylabel(tw.fill('Percentage of ' + title_text
                                             + ' carried out non-F2F',40))
     ax_nf2fspec_imd2.set_xticks(ax_nf2fspec_imd2.get_xticks())
-    labels = [tw.fill(l, 16) for l in nf2f_imd2_spec_plt.sort_values('diffs')['Specialty'].unique()]
+    labels = [tw.fill(l, 16) for l
+              in nf2f_imd2_spec_plt.sort_values('diffs')['Specialty'].unique()]
     ax_nf2fspec_imd2.set_xticklabels(labels = labels)
     plt.tight_layout()
-    plt.savefig(title_text + ' Slide 8.png', bbox_inches='tight')
+    plt.savefig('plots/' + title_text + ' Slide 8.png', bbox_inches='tight')
 
     # ======================================================================
     ############Decile (10 category) SLIDE 9
     #Make a plot of the proportions
-    fig1, ax_op_dec = plt.subplots(1, 1, figsize = (8,5))
+    fig1, ax_op_dec = plt.subplots(1, 1, figsize = (7,5))
     sns.histplot(data=op_data_temp_imd, x='IndexValue', hue='Visit',
                  hue_order=hue_order, multiple='fill', discrete=True, 
                  palette=['lemonchiffon','orange'], alpha=1, ax=ax_op_dec)
@@ -859,12 +752,43 @@ for i,df in enumerate([op_data, unique_opats]):
     ax_op_dec.legend(handles, hue_order,
                      title = 'Appointment Type',
                      bbox_to_anchor = (1,1))
-    plt.savefig(title_text + ' Slide 9.png', bbox_inches='tight')
-    
+    plt.savefig('plots/' + title_text + ' Slide 9.png', bbox_inches='tight')
+
+    if i == 0:
+        #Get all pairs of decile numbers with no repeats and hypothesis test
+        imd_pvals = []
+        pair_list = itertools.combinations(range(0,10),2)
+        for r in pair_list:
+            pvalue = propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
+                                        num_list[r[1]]/tot_list[r[1]],
+                                        num_list[r[0]], num_list[r[1]])
+            #Record statistically significant results
+            if pvalue < 0.025:
+                imd_pvals.append([pvalue, r])
+
+        #Make a df of the results
+        imd_prop_test = pd.DataFrame(imd_pvals, columns=['pvals', 'pairs'])
+        imd_list = [j for j in range(1,11)]
+        imd_prop_test['imd1'] = (imd_prop_test['pairs']
+                                 .apply(lambda x: imd_list[x[0]]))
+        imd_prop_test['imd2'] = (imd_prop_test['pairs']
+                                 .apply(lambda x: imd_list[x[1]]))
+        #write a string of the IMD pairs that have a significant difference
+        pairs = (imd_prop_test.groupby('imd1', as_index=False)['imd2']
+                 .apply(list).values.tolist())
+        slide9_text = ''
+        for pair in pairs:
+            imd = pair[0]
+            lst = pair[1]
+            seccond_str = ('all other IMD values' if len(lst) == (10 - imd)
+                           else ('IMDs ' +   ', '.join(map(str, lst))))
+            string = f'IMD {imd} and {seccond_str}\n'
+            slide9_text += string
+
     # ====================================================================
     #         #Ethnicity  SLIDES 10-11
     # ====================================================================
-    #############Ethnicity bar plot 
+    #############Ethnicity bar plot SLIDE 10
     #Get rid of missing values
     op_data_temp_eth = df.loc[~df['Ethnicity']
                           .isin(['Unknown', 'Unwilling to answer'])].copy()
@@ -873,9 +797,10 @@ for i,df in enumerate([op_data, unique_opats]):
                                          'White British', 'Ethnic Minority')
     #Make a plot of the proportions 
     fig, ax_op_eth = plt.subplots(1, 1, figsize = (4,4))
-    sns.histplot(data=op_data_temp_eth.sort_values('value'), x='value', hue="Visit",
-                 hue_order=hue_order, multiple="fill", discrete=True,
-                 palette=['lemonchiffon','orange'], alpha=1, ax=ax_op_eth)
+    sns.histplot(data=op_data_temp_eth.sort_values('value'), x='value',
+                 hue="Visit", hue_order=hue_order, multiple="fill",
+                 discrete=True, palette=['lemonchiffon','orange'], alpha=1,
+                 ax=ax_op_eth)
     ax_op_eth.yaxis.set_major_formatter(PercentFormatter(1))
     ax_op_eth.set_xlabel('')
     #Make a list of the numbers to include under the percentages
@@ -899,14 +824,14 @@ for i,df in enumerate([op_data, unique_opats]):
                                         numbers[1]/totals[1],
                                         numbers[0], numbers[1], alpha=0.025)
         #Add bars to show if there is a significant difference
-        text = ('Significant difference' if pval_op_eth < 0.025
+        slide10_text = ('Significant difference' if pval_op_eth < 0.025
                 else ' No significant difference')
     else:
-        text = 'No Ethnic Minority Data'
-    label_diff(ax_op_eth, 0, 1, text, [0,1], [1,1])
-    plt.savefig(title_text + ' Slide 10.png', bbox_inches='tight')
+        slide10_text = 'No Ethnic Minority Data'
+    label_diff(ax_op_eth, 0, 1, slide10_text, [0,1], [1,1])
+    plt.savefig('plots/' + title_text + ' Slide 10.png', bbox_inches='tight')
 
-    # =============================================================================
+    # =======================================================================
     ############Ethnicity Non-F2F testing, separated by pfmgt_spec  SLIDE 11
     spec_unique = df['specialty'].unique()
     #Make an empty list to store pvalues in
@@ -974,7 +899,7 @@ for i,df in enumerate([op_data, unique_opats]):
                                id_vars=['Specialty'],
                                value_vars = ['EM Non-F2F Perc',
                                              'WB Non-F2F Perc'])
-    fig, ax_nf2fspec_eth = plt.subplots(1,1,figsize=(12,4))
+    fig, ax_nf2fspec_eth = plt.subplots(1,1,figsize=(9,4))
     sns.barplot(data=nf2f_eth_slc_plt, x='Specialty', hue='variable', y='value',
                 ax=ax_nf2fspec_eth, palette=['royalblue','lightskyblue'])
     legend = ax_nf2fspec_eth.get_legend()
@@ -992,7 +917,7 @@ for i,df in enumerate([op_data, unique_opats]):
     labels = [tw.fill(l, 16) for l in nf2f_eth_slc_plt.Specialty.unique()]
     ax_nf2fspec_eth.set_xticklabels(labels = labels)
     plt.tight_layout()
-    plt.savefig(title_text + ' Slide 11.png', bbox_inches='tight')
+    plt.savefig('plots/' + title_text + ' Slide 11.png', bbox_inches='tight')
 
     # ====================================================================
     #         #Age  SLIDE 12
@@ -1005,7 +930,7 @@ for i,df in enumerate([op_data, unique_opats]):
                                    bins=[-1, 19, 29, 39, 49, 59, 69, 79, 120],
                                    labels=age_list)
     #Make a plot of the proportions
-    fig1, ax_op_age=plt.subplots(1,1)
+    fig1, ax_op_age=plt.subplots(1, 1, figsize = (7,5))
     sns.histplot(data=op_data_temp_age.sort_values('value'), x='value',
                  hue="Visit", hue_order=hue_order, multiple="fill",
                  discrete=True, palette=['lemonchiffon','orange'], alpha=1,
@@ -1029,34 +954,40 @@ for i,df in enumerate([op_data, unique_opats]):
     handles = legend.legend_handles
     ax_op_age.legend(handles, hue_order, title='Appointment Type',
                      bbox_to_anchor=(1,1))
-    plt.savefig(title_text + ' Slide 12.png', bbox_inches='tight')
-    
-
-    #DO WE NEED THE BELOW? DOESN'T SEEM TO DO ANYTHING - is this the slide text?
+    plt.savefig('plots/' + title_text + ' Slide 12.png', bbox_inches='tight')
 
     #Hypothesis testing for age bands - only if looking at all appts
-    # if i==0:
-    #     #Get all pairs of decile numbers with no repeats
-    #     age_pvals = []
-    #     pair_list = []
-    #     for r in itertools.combinations(range(len(age_list)),2):
-    #         age_pvals.append(propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
-    #                                             num_list[r[1]]/tot_list[r[1]],
-    #                                             num_list[r[0]], num_list[r[1]]))
-    #         pair_list.append(r)
+    if i==0:
+        #Get all pairs of decile numbers with no repeats
+        age_pvals = []
+        for r in itertools.combinations(range(len(age_list)),2):
+            pval = propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
+                                      num_list[r[1]]/tot_list[r[1]],
+                                      num_list[r[0]], num_list[r[1]])
+            #Record NON statistically significant results (as shorter to write)
+            if pval > 0.025:
+                age_pvals.append([r, pval])
     
-    #     #Make a df of the results
-    #     age_prop_test = pd.DataFrame(age_pvals)
-    #     age_prop_test['pairs'] = pair_list
-    #     #Apply 2.5% significance level
-    #     age_prop_test['result'] = age_prop_test[0].apply(\
-    #                             lambda x: 'No Difference' if x > 0.025 else 'Difference')
-    #     age_prop_test['age1'] = age_prop_test['pairs'].apply(lambda x: age_list[x[0]])
-    #     age_prop_test['age2'] = age_prop_test['pairs'].apply(lambda x: age_list[x[1]])
+        #Make a df of the results
+        age_prop_test = pd.DataFrame(age_pvals, columns=['pairs', 'pval'])
+        age_prop_test['age1'] = (age_prop_test['pairs']
+                                 .apply(lambda x: age_list[x[0]]))
+        age_prop_test['age2'] = (age_prop_test['pairs']
+                                 .apply(lambda x: age_list[x[1]]))
     
+        #write a string of the age pairs that have a significant difference
+        pairs = (age_prop_test.groupby('age1', as_index=False)['age2']
+                 .apply(list).values.tolist())
+        slide12_text = ''
+        for pair in pairs:
+            string = f'{pair[0]} & {pair[1][0]}\n'
+            slide12_text += string
+
 # =============================================================================
 # #DM01 Queries
 # =============================================================================
+t2 = time.time()
+print(f'First analysis run in {(t2-t1)/60} mins')
 print('DM01 query section')
 dm01_endo_query = f"""
 							SET NOCOUNT ON;
@@ -1469,7 +1400,7 @@ AND imd.EndDate IS NULL
 ORDER BY [Attendance date]"""
 print('Endo query running...')
 endo_DM01 = pd.read_sql(dm01_endo_query, sdmart_engine)
-print('Done!')
+print('Endo query complete')
 
 print('CRIS query running...')
 dm01_cris_query = f"""
@@ -1506,7 +1437,7 @@ AND Event_Date BETWEEN '01-Apr-2021' AND '{op_end_date}'
 AND imd.EndDate IS NULL
 ORDER BY CAST(Event_Date AS date) DESC"""
 cris_DM01 = pd.read_sql(dm01_cris_query, sdmart_engine)
-print('Done!')
+print('CRIS query complete')
 
 print('Audiology query running...')
 dm01_audio_query = f"""
@@ -1587,7 +1518,7 @@ AND imd.EndDate IS NULL
 ORDER BY audio.start_dttm
 """
 audio_DM01 = pd.read_sql(dm01_audio_query, sdmart_engine)
-print('Done!')
+print('Audiology query complete')
 
 print('Other DM01 query running...')
 dm01_other_query = f"""
@@ -2206,9 +2137,11 @@ on pats.pat_pcode = imd.PostcodeFormatted
 where imd.EndDate IS NULL
 """
 other_DM01 = pd.read_sql(dm01_other_query, sdmart_engine)
-print('Done!')
+print('Other DM01 query complete')
 #All queries run, so close the engine
 sdmart_engine.dispose()
+t3 = time.time()
+print(f'Queries run in {(t3-t2)/60} mins')
 
 # =============================================================================
 # #DM01 Analysis Section SLIDE 13
@@ -2231,9 +2164,11 @@ dm01_full = dm01_full.loc[(dm01_full['LoW'] >= 0)].copy()
 #Make subsets of data    
 dm01_WB = dm01_full.loc[dm01_full['Ethnicity'] == 'White British'].copy()
 dm01_ME = dm01_full.loc[~dm01_full['Ethnicity']
-                        .isin(['White British', 'Unknown',  'Unwilling to answer'])].copy()
+                        .isin(['White British', 'Unknown',
+                               'Unwilling to answer'])].copy()
 dm01_IMD12 = dm01_full.loc[dm01_full['IndexValue'].isin([1,2])].copy()
-dm01_IMD310 = dm01_full.loc[dm01_full['IndexValue'].isin([3,4,5,6,7,8,9,10])].copy()
+dm01_IMD310 = dm01_full.loc[
+    dm01_full['IndexValue'].isin([3,4,5,6,7,8,9,10])].copy()
     
 #For each category (WB, ME, IMD1&2, IMD3-10), find the median LoW for each month
 dfs = [dm01_WB, dm01_ME, dm01_IMD12, dm01_IMD310]
@@ -2253,8 +2188,6 @@ df_to_plot = pd.concat(df_to_plot,ignore_index=True)
 df_to_plot['Day'] = 1
 df_to_plot['Date'] = pd.to_datetime(df_to_plot[['Year','Month','Day']])
 #Add in a column to use for clearer plotting
-df_to_plot['plot_cat'] = df_to_plot['type'].apply(lambda x:'IMD' if x in \
-                                  ('IMD 1&2', 'IMD 3-10') else 'Ethnicity')
 df_to_plot['plot_cat'] = np.where(df_to_plot['type'].isin(['IMD 1&2',
                                                            'IMD 3-10']),
                                                            'IMD', 'Ethnicity')
@@ -2283,4 +2216,223 @@ ymin = min(ax[0].get_ylim()[0], ax[1].get_ylim()[0])
 ymax = max(ax[0].get_ylim()[1], ax[1].get_ylim()[1])
 ax[0].set_ylim(ymin = ymin, ymax = ymax)
 ax[1].set_ylim(ymin = ymin, ymax = ymax)
-plt.savefig('Slide 13.png', bbox_inches='tight')
+plt.savefig('plots/Slide 13.png', bbox_inches='tight')
+t4 = time.time()
+print(f'Seccond analysis run in {(t4-t3)/60} mins')
+# ====================================================================
+#  #Create Powerpoint
+# ====================================================================
+prs = Presentation()
+start = start_date.strftime('%d/%m/%Y')
+end = end_date.strftime('%d/%m/%Y')
+
+####SLIDE 1
+slide_layout = prs.slide_layouts[0]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+subtitle = slide.placeholders[1]
+title.text = 'Health Inequalities Data'
+subtitle.text = version_date
+
+####SLIDE 2
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'RTT LoW – only last 12 months'
+img = slide.shapes.add_picture('plots/Slide 2.png',
+                               left=Inches(2), top=Inches(1.5))
+text_box = slide.shapes.add_textbox(left=Inches(1), top=Inches(6.5),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = f'Clock stops from {start} to {end}'
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 3
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'RTT LoW by SLC - Ethnicity'
+img = slide.shapes.add_picture('plots/Slide 3.png',
+                               left=Inches(0.5), top=Inches(2))
+text_box = slide.shapes.add_textbox(left=Inches(0.5), top=Inches(6.5),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text='Significant difference in median LoW by ethnicity for the SLCs shown'
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 4
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'RTT LoW by SLC - IMD'
+img = slide.shapes.add_picture('plots/Slide 4.png',
+                               left=Inches(1.25), top=Inches(1.5))
+text_box = slide.shapes.add_textbox(left=Inches(0.75), top=Inches(6.5),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = 'Significant difference in median LoW by IMD for the SLCs shown'
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 5
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'Proportion of patients waiting > 52 weeks'
+img = slide.shapes.add_picture('plots/Slide 5.png',
+                               left=Inches(2), top=Inches(1.75))
+text_box = slide.shapes.add_textbox(left=Inches(0.75), top=Inches(6.5),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = f'There is {imd_str} significant difference for ethnicity or IMD'
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 6
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'Non-F2F Outpatient appointments'
+text_box = slide.shapes.add_textbox(left=Inches(0.75), top=Inches(2),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+tb.text = f'Outpatient appointments from {start} to {end} included'
+prg = tb.add_paragraph()
+prg.text = 'Cancelled and DNA appointments excluded'
+
+####SLIDE 7
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'IMD – 2 category'
+img = slide.shapes.add_picture('plots/Outpatient Appointments Slide 7.png',
+                               left=Inches(0.5), top=Inches(2))
+text_box = slide.shapes.add_textbox(left=Inches(6), top=Inches(2.25),
+                                    width=Inches(2.5), height=Inches(5))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = f'''{slide7_text} in\n percentage of outpatient
+ appointments carried\n out non-F2F for IMD 1-2 vs\n IMD 3-10'''
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 8
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'IMD – 2 category'
+img = slide.shapes.add_picture('plots/Outpatient Appointments Slide 8.png',
+                               left=Inches(0.5), top=Inches(2))
+text_box = slide.shapes.add_textbox(left=Inches(0.75), top=Inches(6),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = '''Significant difference in percentage of OP appointments carried
+ out non-F2F for the above specialties'''
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 9
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'IMD – 10 category'
+img = slide.shapes.add_picture('plots/Outpatient Appointments Slide 9.png',
+                               left=Inches(0.5), top=Inches(2.25),
+                               width=Inches(5.5))
+text_box = slide.shapes.add_textbox(left=Inches(6), top=Inches(2.25),
+                                    width=Inches(3), height=Inches(6))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = f'''Significant difference in\n percentage of outpatient
+ appointments carried\n out non-F2F between:\n''' + slide9_text
+font = run.font
+font.size = Pt(20)
+
+####SLIDE 10
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'Ethnicity'
+img = slide.shapes.add_picture('plots/Outpatient Appointments Slide 10.png',
+                               left=Inches(0.5), top=Inches(2.25))
+text_box = slide.shapes.add_textbox(left=Inches(5.75), top=Inches(2.25),
+                                    width=Inches(3.5), height=Inches(5))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = f'''{slide10_text} in\n the proportion of 
+non-F2F OP appts for ethnic\n minority and white british\n patients.'''
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 11
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'Ethnicity by Specialty'
+img = slide.shapes.add_picture('plots/Outpatient Appointments Slide 11.png',
+                               left=Inches(0.75), top=Inches(2))
+text_box = slide.shapes.add_textbox(left=Inches(0.5), top=Inches(6),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = '''Significant difference in percentage of OP appointments carried
+ out non-F2F for the above specialties'''
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 12
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'Age'
+img = slide.shapes.add_picture('plots/Outpatient Appointments Slide 12.png',
+                               left=Inches(0.5), top=Inches(2.25),
+                               width=Inches(5.5))
+text_box = slide.shapes.add_textbox(left=Inches(6), top=Inches(2.25),
+                                    width=Inches(3), height=Inches(5))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = (f'''Significant difference\n between all age 
+categories except:\n''' + slide12_text)
+font = run.font
+font.size = Pt(24)
+
+####SLIDE 13
+slide_layout = prs.slide_layouts[5]
+slide = prs.slides.add_slide(slide_layout)
+title = slide.shapes.title
+title.text = 'DM01 – excluding LD plot'
+img = slide.shapes.add_picture('plots/Slide 13.png',
+                               left=Inches(1.75), top=Inches(1.5))
+text_box = slide.shapes.add_textbox(left=Inches(1), top=Inches(6),
+                                    width=Inches(12), height=Inches(1))
+tb = text_box.text_frame
+p = tb.paragraphs[0]
+run = p.add_run()
+run.text = '''Significant difference in DM01 wait times for both pairs of 
+characteristics. Sustained decrease in LoW since Jan 2023.'''
+font = run.font
+font.size = Pt(24)
+
+####SAVE FILE
+prs.save(f'outputs/Health Inequalities Data {version_date}.pptx')
+print('Presentation created')
+t5 = time.time()
+print(f'Total run time {(t5-t0)/60} mins')

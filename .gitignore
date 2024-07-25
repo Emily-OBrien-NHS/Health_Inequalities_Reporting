@@ -9,3 +9,9 @@
 
 #any pptx files
 *.pptx
+
+#plots folder
+plots/
+
+#outputs
+outputs/
