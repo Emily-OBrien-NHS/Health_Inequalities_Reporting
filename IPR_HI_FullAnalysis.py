@@ -565,7 +565,7 @@ ax_52WW.legend(handles,
                bbox_to_anchor=(1,1))
 #Make a list of the numbers to include under the percentages
 numbers = [n_IMD12, n_IMD12_52, n_em, n_em_52]
-totals = [total_num_IMD, total_num_IMD_52, total_num_IMD_52, total_num_eth_52]
+totals = [total_num_IMD, total_num_IMD_52, total_num_eth, total_num_eth_52]
 show_values_on_bars(ax_52WW, numbers = [i for i in numbers if i!=0])
 show_totals(ax_52WW, totals)
 #add text boxes
@@ -587,401 +587,393 @@ plt.savefig('plots/Slide 5.png', bbox_inches='tight')
 # ========================================================================
 #     #Digital Access Analysis
 # ========================================================================
-#First, find basic percentages
-#Find unique patients in each category
-unique_opats = op_data.drop_duplicates(subset=['pasid', 'Visit'])
+#Set title text
+title_text = 'Outpatient Appointments'
+hue_order = ['F2F','Non-F2F']
 
-#For both all op data and unique outpatients
-for i,df in enumerate([op_data, unique_opats]):
-    #Set title text
-    title_text = 'Outpatient Appointments' if i==0 else 'Outpatients'
-    hue_order = ['F2F','Non-F2F']
+# ======================================================================
+#         #IMD (SLIDES 7-9)
+# ======================================================================
+#########Decile (2 category)  SLIDE 7
+#Remove missing data
+op_data_temp_imd = op_data.loc[~pd.isnull(op_data['IndexValue'])].copy()
+op_data_temp_imd['value'] = np.where(op_data_temp_imd['IndexValue']
+                                            .isin([1, 2]), 'IMD 1-2',
+                                            'IMD 3-10')
+#Bar plots
+fig1, ax_op_dec2 = plt.subplots(1, 1, figsize = (4,4))
+sns.histplot(data=op_data_temp_imd.sort_values('value'), x='value',
+                hue="Visit", hue_order=hue_order, multiple="fill",
+                discrete=True,  palette=['lemonchiffon','orange'], alpha=1,
+                ax=ax_op_dec2)
+#Make a list of the numbers to include under the percentages
+nonf2f_counts = op_data_temp_imd.loc[op_data_temp_imd['Visit'] == 'Non-F2F',
+                                    'value'].value_counts()
+num_list = counts_list(nonf2f_counts, ['IMD 1-2', 'IMD 3-10'])
+counts = op_data_temp_imd['value'].value_counts()
+tot_list = counts_list(counts, ['IMD 1-2', 'IMD 3-10'])
+show_values_on_bars(ax_op_dec2, rounded=0,
+                    numbers = [j for j in num_list if j!=0])
+show_totals(ax_op_dec2, tot_list)
+ax_op_dec2.yaxis.set_major_formatter(PercentFormatter(1))
+ax_op_dec2.set_xlabel('')
+ax_op_dec2.set_ylabel('Percentage of ' + title_text)
+legend = ax_op_dec2.get_legend()
+# #Get seaborn legend
+handles = legend.legend_handles
+ax_op_dec2.legend(handles, hue_order, title='Appointment Type',
+                    bbox_to_anchor=(1,1))
+#Proportion testing
+pval_op_imd = propHypothesisTest(num_list[0]/tot_list[0],
+                                    num_list[1]/tot_list[1],
+                                    num_list[0], num_list[1], alpha=0.025)
+#Add bars to show if there is a significant difference
+slide7_text = ('Significant difference' if pval_op_imd < 0.025
+        else ' No significant difference')
+label_diff(ax_op_dec2, 0, 1, slide7_text, [0,1], [1,1])
+plt.savefig('plots/' + title_text + ' Slide 7.png', bbox_inches='tight')
 
-    # ======================================================================
-    #         #IMD (SLIDES 7-9)
-    # ======================================================================
-    #########Decile (2 category)  SLIDE 7
-    #Remove missing data
-    op_data_temp_imd = df.loc[~pd.isnull(df['IndexValue'])].copy()
-    op_data_temp_imd['value'] = np.where(op_data_temp_imd['IndexValue']
-                                              .isin([1, 2]), 'IMD 1-2',
-                                              'IMD 3-10')
-    #Bar plots
-    fig1, ax_op_dec2 = plt.subplots(1, 1, figsize = (4,4))
-    sns.histplot(data=op_data_temp_imd.sort_values('value'), x='value',
-                 hue="Visit", hue_order=hue_order, multiple="fill",
-                 discrete=True,  palette=['lemonchiffon','orange'], alpha=1,
-                 ax=ax_op_dec2)
+# ======================================================================
+#########IMD 1&2 vs 3-10 non-f2f plots and testing  SLIDE 8
+spec_unique = op_data['specialty'].unique()
+#Make an empty list to store pvalues in
+spec_imd2_pvals = []
+spec_12_nf2f_perc = []
+spec_310_nf2f_perc = []
+for spec in spec_unique:
+    #Separate by EM
+    op_data_temp = op_data_temp_imd.loc[op_data_temp_imd['specialty']
+                                        == spec].copy()
     #Make a list of the numbers to include under the percentages
-    nonf2f_counts = op_data_temp_imd.loc[op_data_temp_imd['Visit'] == 'Non-F2F',
-                                     'value'].value_counts()
-    num_list = counts_list(nonf2f_counts, ['IMD 1-2', 'IMD 3-10'])
-    counts = op_data_temp_imd['value'].value_counts()
-    tot_list = counts_list(counts, ['IMD 1-2', 'IMD 3-10'])
-    show_values_on_bars(ax_op_dec2, rounded=0,
-                        numbers = [j for j in num_list if j!=0])
-    show_totals(ax_op_dec2, tot_list)
-    ax_op_dec2.yaxis.set_major_formatter(PercentFormatter(1))
-    ax_op_dec2.set_xlabel('')
-    ax_op_dec2.set_ylabel('Percentage of ' + title_text)
-    legend = ax_op_dec2.get_legend()
-    # #Get seaborn legend
-    handles = legend.legend_handles
-    ax_op_dec2.legend(handles, hue_order, title='Appointment Type',
-                      bbox_to_anchor=(1,1))
-    #Proportion testing
-    pval_op_imd = propHypothesisTest(num_list[0]/tot_list[0],
-                                     num_list[1]/tot_list[1],
-                                     num_list[0], num_list[1], alpha=0.025)
+    #could not shorten as sometimes there isn't data for these.
+    numbers = [op_data_temp[(op_data_temp['value'] == 'IMD 1-2')
+                            & (op_data_temp['Visit'] == 'Non-F2F')]
+                            .shape[0],
+                op_data_temp[(op_data_temp['value'] == 'IMD 3-10')
+                            & (op_data_temp['Visit'] == 'Non-F2F')]
+                            .shape[0]]
+    totals = [op_data_temp[(op_data_temp['value'] == 'IMD 1-2')].shape[0],
+                op_data_temp[(op_data_temp['value'] == 'IMD 3-10')].shape[0]]
+    
+    if totals[0] == 0:
+        spec_12_nf2f_perc.append(0)
+    else:
+        spec_12_nf2f_perc.append(100*(numbers[0]/totals[0]))
+    if totals[1] == 0:
+        spec_310_nf2f_perc.append(0)
+    else:
+        spec_310_nf2f_perc.append(100*(numbers[1]/totals[1]))
+    #Hypothesis test for EM Non-F2F
+    #If no non-F2F patients are seen in either or both ethnicity categories, 
+    #cannot perform hypothesis test
+    if ((all(j > 50 for j in numbers))
+    or ((all(j > 50 for j in totals)) and (all(j > 0 for j in numbers)))):
+        spec_imd2_pvals.append(propHypothesisTest(numbers[0]/totals[0],
+                                                    numbers[1]/totals[1],
+                                                    numbers[0], numbers[1],
+                                                    alpha=0.025))
+    else:
+        spec_imd2_pvals.append(None)
+#Create dataframe
+spec_imd2_pvals = pd.DataFrame({'Specialty':spec_unique,
+                                'p-value':spec_imd2_pvals,
+                                'IMD 1&2 Non-F2F Perc':spec_12_nf2f_perc,
+                                'IMD3-10 Non-F2F Perc':spec_310_nf2f_perc})
+#Barplot
+nf2f_imd2_spec_plt = pd.melt(spec_imd2_pvals[spec_imd2_pvals['p-value']
+                                                <0.025],
+                                id_vars=['Specialty'],
+                                value_vars=['IMD 1&2 Non-F2F Perc',
+                                            'IMD3-10 Non-F2F Perc'])
+#Sort op_data by specialty
+nf2f_imd2_spec_plt.sort_values('Specialty', inplace=True)
+#Order this op_data by the differences between specs. First find the differences
+differences = [item for item in (nf2f_imd2_spec_plt['value'].diff()
+                                    .iloc[1::2].tolist())
+                for j in range(2)]
+
+#Add as new column to op_data
+nf2f_imd2_spec_plt['diffs'] = differences
+fig, ax_nf2fspec_imd2 = plt.subplots(1, 1, figsize=(9,4))
+sns.barplot(data=nf2f_imd2_spec_plt.sort_values('diffs'), x='Specialty',
+            hue='variable', y='value', ax=ax_nf2fspec_imd2,
+            palette=['seagreen','lightgreen'])
+legend = ax_nf2fspec_imd2.get_legend()
+# #Get seaborn legend
+handles = legend.legend_handles
+ax_nf2fspec_imd2.legend(handles, ['IMD 1&2', 'IMD 3-10'],
+                        bbox_to_anchor=(1,1))
+if title_text == 'Outpatients':
+    ax_nf2fspec_imd2.set_ylabel(tw.fill('Percentage of ' + title_text
+                                        + ' seen non-F2F', 40))
+else:
+    ax_nf2fspec_imd2.set_ylabel(tw.fill('Percentage of ' + title_text
+                                        + ' carried out non-F2F',40))
+ax_nf2fspec_imd2.set_xticks(ax_nf2fspec_imd2.get_xticks())
+labels = [tw.fill(l, 16) for l
+            in nf2f_imd2_spec_plt.sort_values('diffs')['Specialty'].unique()]
+ax_nf2fspec_imd2.set_xticklabels(labels = labels)
+plt.tight_layout()
+plt.savefig('plots/' + title_text + ' Slide 8.png', bbox_inches='tight')
+
+# ======================================================================
+############Decile (10 category) SLIDE 9
+#Make a plot of the proportions
+fig1, ax_op_dec = plt.subplots(1, 1, figsize = (7,5))
+sns.histplot(data=op_data_temp_imd, x='IndexValue', hue='Visit',
+                hue_order=hue_order, multiple='fill', discrete=True, 
+                palette=['lemonchiffon','orange'], alpha=1, ax=ax_op_dec)
+#Make a list of the numbers to include under the percentages
+num_list = []
+tot_list = []
+for ii in range(1,11):
+    num_list.append(op_data_temp_imd[(op_data_temp_imd['IndexValue'] == ii)
+                                    & (op_data_temp_imd['Visit'] == 'Non-F2F')
+                                    ].shape[0])
+    tot_list.append(op_data_temp_imd[(op_data_temp_imd['IndexValue'] == ii)
+                                    ].shape[0])
+
+show_values_on_bars(ax_op_dec, rounded=0,
+                    numbers=[ii for ii in num_list if ii!=0])
+show_totals(ax_op_dec, tot_list)
+#show_values_on_bars(ax_op_dec,rounded=0)
+ax_op_dec.yaxis.set_major_formatter(PercentFormatter(1))
+ax_op_dec.set_xlabel('IMD Decile')
+ax_op_dec.set_ylabel('Percentage of ' + title_text)
+legend = ax_op_dec.get_legend()
+# #Get seaborn legend
+handles = legend.legend_handles
+ax_op_dec.legend(handles, hue_order,
+                    title = 'Appointment Type',
+                    bbox_to_anchor = (1,1))
+plt.savefig('plots/' + title_text + ' Slide 9.png', bbox_inches='tight')
+
+#Get all pairs of decile numbers with no repeats and hypothesis test
+imd_pvals = []
+pair_list = itertools.combinations(range(0,10),2)
+for r in pair_list:
+    pvalue = propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
+                                num_list[r[1]]/tot_list[r[1]],
+                                num_list[r[0]], num_list[r[1]])
+    #Record statistically significant results
+    if pvalue < 0.025:
+        imd_pvals.append([pvalue, r])
+
+#Make a op_data of the results
+imd_prop_test = pd.DataFrame(imd_pvals, columns=['pvals', 'pairs'])
+imd_list = [j for j in range(1,11)]
+imd_prop_test['imd1'] = (imd_prop_test['pairs']
+                            .apply(lambda x: imd_list[x[0]]))
+imd_prop_test['imd2'] = (imd_prop_test['pairs']
+                            .apply(lambda x: imd_list[x[1]]))
+#write a string of the IMD pairs that have a significant difference
+pairs = (imd_prop_test.groupby('imd1', as_index=False)['imd2']
+            .apply(list).values.tolist())
+slide9_text = ''
+for pair in pairs:
+    imd = pair[0]
+    lst = pair[1]
+    seccond_str = ('all other IMD values' if len(lst) == (10 - imd)
+                    else ('IMDs ' +   ', '.join(map(str, lst))))
+    string = f'IMD {imd} and {seccond_str}\n'
+    slide9_text += string
+
+# ====================================================================
+#         #Ethnicity  SLIDES 10-11
+# ====================================================================
+#############Ethnicity bar plot SLIDE 10
+#Get rid of missing values
+op_data_temp_eth = op_data.loc[~op_data['Ethnicity']
+                        .isin(['Unknown', 'Unwilling to answer'])].copy()
+op_data_temp_eth['value'] = np.where(op_data_temp_eth['Ethnicity']
+                                        == 'White British',
+                                        'White British', 'Ethnic Minority')
+#Make a plot of the proportions 
+fig, ax_op_eth = plt.subplots(1, 1, figsize = (4,4))
+sns.histplot(data=op_data_temp_eth.sort_values('value'), x='value',
+                hue="Visit", hue_order=hue_order, multiple="fill",
+                discrete=True, palette=['lemonchiffon','orange'], alpha=1,
+                ax=ax_op_eth)
+ax_op_eth.yaxis.set_major_formatter(PercentFormatter(1))
+ax_op_eth.set_xlabel('')
+#Make a list of the numbers to include under the percentages
+nonf2f_counts = op_data_temp_eth.loc[op_data_temp_eth['Visit'] == 'Non-F2F',
+                                    'value'].value_counts()
+numbers = counts_list(nonf2f_counts, ['Ethnic Minority', 'White British'])
+counts = op_data_temp_eth['value'].value_counts()
+totals = counts_list(counts, ['Ethnic Minority', 'White British'])
+show_values_on_bars(ax_op_eth, rounded=0,
+                    numbers=[j for j in numbers if j!=0])
+show_totals(ax_op_eth, totals)
+ax_op_eth.set_ylabel('Percentage of ' + title_text)
+legend = ax_op_eth.get_legend()
+#Get seaborn legend
+handles = legend.legend_handles
+ax_op_eth.legend(handles, hue_order, title='Appointment Type',
+                    bbox_to_anchor=(1,1))
+#Proportion testing
+if numbers[0] > 0:
+    pval_op_eth = propHypothesisTest(numbers[0]/totals[0],
+                                    numbers[1]/totals[1],
+                                    numbers[0], numbers[1], alpha=0.025)
     #Add bars to show if there is a significant difference
-    slide7_text = ('Significant difference' if pval_op_imd < 0.025
+    slide10_text = ('Significant difference' if pval_op_eth < 0.025
             else ' No significant difference')
-    label_diff(ax_op_dec2, 0, 1, slide7_text, [0,1], [1,1])
-    plt.savefig('plots/' + title_text + ' Slide 7.png', bbox_inches='tight')
+else:
+    slide10_text = 'No Ethnic Minority Data'
+label_diff(ax_op_eth, 0, 1, slide10_text, [0,1], [1,1])
+plt.savefig('plots/' + title_text + ' Slide 10.png', bbox_inches='tight')
 
-    # ======================================================================
-    #########IMD 1&2 vs 3-10 non-f2f plots and testing  SLIDE 8
-    spec_unique = df['specialty'].unique()
-    #Make an empty list to store pvalues in
-    spec_imd2_pvals = []
-    spec_12_nf2f_perc = []
-    spec_310_nf2f_perc = []
-    for spec in spec_unique:
-        #Separate by EM
-        op_data_temp = op_data_temp_imd.loc[op_data_temp_imd['specialty']
-                                            == spec].copy()
-        #Make a list of the numbers to include under the percentages
-        #could not shorten as sometimes there isn't data for these.
-        numbers = [op_data_temp[(op_data_temp['value'] == 'IMD 1-2')
-                                & (op_data_temp['Visit'] == 'Non-F2F')]
-                                .shape[0],
-                   op_data_temp[(op_data_temp['value'] == 'IMD 3-10')
-                                & (op_data_temp['Visit'] == 'Non-F2F')]
-                                .shape[0]]
-        totals = [op_data_temp[(op_data_temp['value'] == 'IMD 1-2')].shape[0],
-                  op_data_temp[(op_data_temp['value'] == 'IMD 3-10')].shape[0]]
-        
-        if totals[0] == 0:
-            spec_12_nf2f_perc.append(0)
-        else:
-            spec_12_nf2f_perc.append(100*(numbers[0]/totals[0]))
-        if totals[1] == 0:
-            spec_310_nf2f_perc.append(0)
-        else:
-            spec_310_nf2f_perc.append(100*(numbers[1]/totals[1]))
-        #Hypothesis test for EM Non-F2F
-        #If no non-F2F patients are seen in either or both ethnicity categories, 
-        #cannot perform hypothesis test
-        if ((all(j > 50 for j in numbers))
-        or ((all(j > 50 for j in totals)) and (all(j > 0 for j in numbers)))):
-            spec_imd2_pvals.append(propHypothesisTest(numbers[0]/totals[0],
-                                                      numbers[1]/totals[1],
-                                                      numbers[0], numbers[1],
-                                                      alpha=0.025))
-        else:
-            spec_imd2_pvals.append(None)
-    #Create dataframe
-    spec_imd2_pvals = pd.DataFrame({'Specialty':spec_unique,
-                                    'p-value':spec_imd2_pvals,
-                                    'IMD 1&2 Non-F2F Perc':spec_12_nf2f_perc,
-                                    'IMD3-10 Non-F2F Perc':spec_310_nf2f_perc})
-    #Barplot
-    nf2f_imd2_spec_plt = pd.melt(spec_imd2_pvals[spec_imd2_pvals['p-value']
-                                                    <0.025],
-                                 id_vars=['Specialty'],
-                                 value_vars=['IMD 1&2 Non-F2F Perc',
-                                             'IMD3-10 Non-F2F Perc'])
-    #Sort df by specialty
-    nf2f_imd2_spec_plt.sort_values('Specialty', inplace=True)
-    #Order this df by the differences between specs. First find the differences
-    differences = [item for item in (nf2f_imd2_spec_plt['value'].diff()
-                                     .iloc[1::2].tolist())
-                   for j in range(2)]
+# =======================================================================
+############Ethnicity Non-F2F testing, separated by pfmgt_spec  SLIDE 11
+spec_unique = op_data['specialty'].unique()
+#Make an empty list to store pvalues in
+spec_eth_pvals = []
+spec_wb_nf2f_perc = []
+spec_me_nf2f_perc = []
+n_wb_f2f=[]
+n_wb_nf2f=[]
+n_me_f2f=[]
+n_me_nf2f=[]
 
-    #Add as new column to df
-    nf2f_imd2_spec_plt['diffs'] = differences
-    fig, ax_nf2fspec_imd2 = plt.subplots(1, 1, figsize=(9,4))
-    sns.barplot(data=nf2f_imd2_spec_plt.sort_values('diffs'), x='Specialty',
-                hue='variable', y='value', ax=ax_nf2fspec_imd2,
-                palette=['seagreen','lightgreen'])
-    legend = ax_nf2fspec_imd2.get_legend()
-    # #Get seaborn legend
-    handles = legend.legend_handles
-    ax_nf2fspec_imd2.legend(handles, ['IMD 1&2', 'IMD 3-10'],
-                            bbox_to_anchor=(1,1))
-    if title_text == 'Outpatients':
-        ax_nf2fspec_imd2.set_ylabel(tw.fill('Percentage of ' + title_text
-                                            + ' seen non-F2F', 40))
-    else:
-        ax_nf2fspec_imd2.set_ylabel(tw.fill('Percentage of ' + title_text
-                                            + ' carried out non-F2F',40))
-    ax_nf2fspec_imd2.set_xticks(ax_nf2fspec_imd2.get_xticks())
-    labels = [tw.fill(l, 16) for l
-              in nf2f_imd2_spec_plt.sort_values('diffs')['Specialty'].unique()]
-    ax_nf2fspec_imd2.set_xticklabels(labels = labels)
-    plt.tight_layout()
-    plt.savefig('plots/' + title_text + ' Slide 8.png', bbox_inches='tight')
-
-    # ======================================================================
-    ############Decile (10 category) SLIDE 9
-    #Make a plot of the proportions
-    fig1, ax_op_dec = plt.subplots(1, 1, figsize = (7,5))
-    sns.histplot(data=op_data_temp_imd, x='IndexValue', hue='Visit',
-                 hue_order=hue_order, multiple='fill', discrete=True, 
-                 palette=['lemonchiffon','orange'], alpha=1, ax=ax_op_dec)
+for spec in spec_unique:
+    #Separate by EM
+    op_data_temp = (op_data_temp_eth.loc[op_data_temp_eth['specialty']
+                                        == spec].copy()
+                                        .sort_values(by='Visit'))
     #Make a list of the numbers to include under the percentages
-    num_list = []
-    tot_list = []
-    for ii in range(1,11):
-        num_list.append(op_data_temp_imd[(op_data_temp_imd['IndexValue'] == ii)
-                                     & (op_data_temp_imd['Visit'] == 'Non-F2F')
-                                     ].shape[0])
-        tot_list.append(op_data_temp_imd[(op_data_temp_imd['IndexValue'] == ii)
-                                     ].shape[0])
-
-    show_values_on_bars(ax_op_dec, rounded=0,
-                        numbers=[ii for ii in num_list if ii!=0])
-    show_totals(ax_op_dec, tot_list)
-    #show_values_on_bars(ax_op_dec,rounded=0)
-    ax_op_dec.yaxis.set_major_formatter(PercentFormatter(1))
-    ax_op_dec.set_xlabel('IMD Decile')
-    ax_op_dec.set_ylabel('Percentage of ' + title_text)
-    legend = ax_op_dec.get_legend()
-    # #Get seaborn legend
-    handles = legend.legend_handles
-    ax_op_dec.legend(handles, hue_order,
-                     title = 'Appointment Type',
-                     bbox_to_anchor = (1,1))
-    plt.savefig('plots/' + title_text + ' Slide 9.png', bbox_inches='tight')
-
-    if i == 0:
-        #Get all pairs of decile numbers with no repeats and hypothesis test
-        imd_pvals = []
-        pair_list = itertools.combinations(range(0,10),2)
-        for r in pair_list:
-            pvalue = propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
-                                        num_list[r[1]]/tot_list[r[1]],
-                                        num_list[r[0]], num_list[r[1]])
-            #Record statistically significant results
-            if pvalue < 0.025:
-                imd_pvals.append([pvalue, r])
-
-        #Make a df of the results
-        imd_prop_test = pd.DataFrame(imd_pvals, columns=['pvals', 'pairs'])
-        imd_list = [j for j in range(1,11)]
-        imd_prop_test['imd1'] = (imd_prop_test['pairs']
-                                 .apply(lambda x: imd_list[x[0]]))
-        imd_prop_test['imd2'] = (imd_prop_test['pairs']
-                                 .apply(lambda x: imd_list[x[1]]))
-        #write a string of the IMD pairs that have a significant difference
-        pairs = (imd_prop_test.groupby('imd1', as_index=False)['imd2']
-                 .apply(list).values.tolist())
-        slide9_text = ''
-        for pair in pairs:
-            imd = pair[0]
-            lst = pair[1]
-            seccond_str = ('all other IMD values' if len(lst) == (10 - imd)
-                           else ('IMDs ' +   ', '.join(map(str, lst))))
-            string = f'IMD {imd} and {seccond_str}\n'
-            slide9_text += string
-
-    # ====================================================================
-    #         #Ethnicity  SLIDES 10-11
-    # ====================================================================
-    #############Ethnicity bar plot SLIDE 10
-    #Get rid of missing values
-    op_data_temp_eth = df.loc[~df['Ethnicity']
-                          .isin(['Unknown', 'Unwilling to answer'])].copy()
-    op_data_temp_eth['value'] = np.where(op_data_temp_eth['Ethnicity']
-                                         == 'White British',
-                                         'White British', 'Ethnic Minority')
-    #Make a plot of the proportions 
-    fig, ax_op_eth = plt.subplots(1, 1, figsize = (4,4))
-    sns.histplot(data=op_data_temp_eth.sort_values('value'), x='value',
-                 hue="Visit", hue_order=hue_order, multiple="fill",
-                 discrete=True, palette=['lemonchiffon','orange'], alpha=1,
-                 ax=ax_op_eth)
-    ax_op_eth.yaxis.set_major_formatter(PercentFormatter(1))
-    ax_op_eth.set_xlabel('')
-    #Make a list of the numbers to include under the percentages
-    nonf2f_counts = op_data_temp_eth.loc[op_data_temp_eth['Visit'] == 'Non-F2F',
-                                     'value'].value_counts()
-    numbers = counts_list(nonf2f_counts, ['Ethnic Minority', 'White British'])
-    counts = op_data_temp_eth['value'].value_counts()
-    totals = counts_list(counts, ['Ethnic Minority', 'White British'])
-    show_values_on_bars(ax_op_eth, rounded=0,
-                        numbers=[j for j in numbers if j!=0])
-    show_totals(ax_op_eth, totals)
-    ax_op_eth.set_ylabel('Percentage of ' + title_text)
-    legend = ax_op_eth.get_legend()
-    #Get seaborn legend
-    handles = legend.legend_handles
-    ax_op_eth.legend(handles, hue_order, title='Appointment Type',
-                     bbox_to_anchor=(1,1))
-    #Proportion testing
-    if numbers[0] > 0:
-        pval_op_eth = propHypothesisTest(numbers[0]/totals[0],
-                                        numbers[1]/totals[1],
-                                        numbers[0], numbers[1], alpha=0.025)
-        #Add bars to show if there is a significant difference
-        slide10_text = ('Significant difference' if pval_op_eth < 0.025
-                else ' No significant difference')
+    #could not shorten as sometimes there isn't data for these.
+    numbers = [op_data_temp[(op_data_temp['value'] == 'White British')
+                            & (op_data_temp['Visit']
+                                == 'Non-F2F')].shape[0],
+                op_data_temp[(op_data_temp['value'] == 'Ethnic Minority')
+                            & (op_data_temp['Visit']
+                                == 'Non-F2F')].shape[0]]
+    totals = [op_data_temp[(op_data_temp['value']
+                            == 'White British')].shape[0],
+                op_data_temp[(op_data_temp['value']
+                            == 'Ethnic Minority')].shape[0]]
+    n_wb_nf2f.append(numbers[0])
+    n_me_nf2f.append(numbers[1])
+    n_wb_f2f.append(totals[0] - numbers[0])
+    n_me_f2f.append(totals[1] - numbers[1])
+    #If either of the totals values is zero, set as zero 
+    if totals[0] == 0:
+        spec_wb_nf2f_perc.append(0)
     else:
-        slide10_text = 'No Ethnic Minority Data'
-    label_diff(ax_op_eth, 0, 1, slide10_text, [0,1], [1,1])
-    plt.savefig('plots/' + title_text + ' Slide 10.png', bbox_inches='tight')
-
-    # =======================================================================
-    ############Ethnicity Non-F2F testing, separated by pfmgt_spec  SLIDE 11
-    spec_unique = df['specialty'].unique()
-    #Make an empty list to store pvalues in
-    spec_eth_pvals = []
-    spec_wb_nf2f_perc = []
-    spec_me_nf2f_perc = []
-    n_wb_f2f=[]
-    n_wb_nf2f=[]
-    n_me_f2f=[]
-    n_me_nf2f=[]
-
-    for spec in spec_unique:
-        #Separate by EM
-        op_data_temp = (op_data_temp_eth.loc[op_data_temp_eth['specialty']
-                                            == spec].copy()
-                                            .sort_values(by='Visit'))
-        #Make a list of the numbers to include under the percentages
-        #could not shorten as sometimes there isn't data for these.
-        numbers = [op_data_temp[(op_data_temp['value'] == 'White British')
-                                & (op_data_temp['Visit']
-                                   == 'Non-F2F')].shape[0],
-                   op_data_temp[(op_data_temp['value'] == 'Ethnic Minority')
-                                & (op_data_temp['Visit']
-                                   == 'Non-F2F')].shape[0]]
-        totals = [op_data_temp[(op_data_temp['value']
-                                == 'White British')].shape[0],
-                  op_data_temp[(op_data_temp['value']
-                                == 'Ethnic Minority')].shape[0]]
-        n_wb_nf2f.append(numbers[0])
-        n_me_nf2f.append(numbers[1])
-        n_wb_f2f.append(totals[0] - numbers[0])
-        n_me_f2f.append(totals[1] - numbers[1])
-        #If either of the totals values is zero, set as zero 
-        if totals[0] == 0:
-            spec_wb_nf2f_perc.append(0)
-        else:
-            spec_wb_nf2f_perc.append(100*(numbers[0]/totals[0]))
-        if totals[1] == 0:
-            spec_me_nf2f_perc.append(0)
-        else:
-            spec_me_nf2f_perc.append(100*(numbers[1]/totals[1]))
-        
-        #If no non-F2F patients are seen in either or both ethnicity categories, 
-        #cannot perform hypothesis test
-        if ((all(j > 50 for j in numbers)) or
-            ((all(j > 50 for j in totals))and (all(j > 0 for j in numbers)))):
-            spec_eth_pvals.append(propHypothesisTest(numbers[0]/totals[0],
-                                                     numbers[1]/totals[1],
-                                                     numbers[0], numbers[1],
-                                                     alpha=0.025))
-        else:
-            spec_eth_pvals.append(None)
-    #create dataframe
-    spec_eth_pvals = pd.DataFrame({'Specialty':spec_unique,
-                                   'p-value':spec_eth_pvals,
-                                   'WB Non-F2F Perc':spec_wb_nf2f_perc,
-                                   'EM Non-F2F Perc':spec_me_nf2f_perc,
-                                   'WB F2F':n_wb_f2f, 'WB NF2F':n_wb_nf2f,
-                                   'EM F2F':n_me_f2f, 'EM NF2F':n_me_nf2f})
-    spec_eth_pvals['WB-EM NonF2F Perc'] = (spec_eth_pvals['WB Non-F2F Perc']
-                                           - spec_eth_pvals['EM Non-F2F Perc'])
-    #Barplot
-    nf2f_eth_slc_plt = pd.melt(spec_eth_pvals[spec_eth_pvals['p-value']<0.025]
-                               .sort_values('WB-EM NonF2F Perc'),
-                               id_vars=['Specialty'],
-                               value_vars = ['EM Non-F2F Perc',
-                                             'WB Non-F2F Perc'])
-    fig, ax_nf2fspec_eth = plt.subplots(1,1,figsize=(9,4))
-    sns.barplot(data=nf2f_eth_slc_plt, x='Specialty', hue='variable', y='value',
-                ax=ax_nf2fspec_eth, palette=['royalblue','lightskyblue'])
-    legend = ax_nf2fspec_eth.get_legend()
-    #Get seaborn legend
-    handles = legend.legend_handles
-    ax_nf2fspec_eth.legend(handles, ['Ethnic Minority', 'White British'],
-                           bbox_to_anchor=(1,1))
-    if title_text == 'Outpatients':
-        ax_nf2fspec_eth.set_ylabel(tw.fill('Percentage of ' + title_text
-                                           + ' seen non-F2F', 40))
+        spec_wb_nf2f_perc.append(100*(numbers[0]/totals[0]))
+    if totals[1] == 0:
+        spec_me_nf2f_perc.append(0)
     else:
-        ax_nf2fspec_eth.set_ylabel(tw.fill('Percentage of ' + title_text
-                                           + ' carried out non-F2F', 40))
-    ax_nf2fspec_eth.set_xticks(ax_nf2fspec_eth.get_xticks())
-    labels = [tw.fill(l, 16) for l in nf2f_eth_slc_plt.Specialty.unique()]
-    ax_nf2fspec_eth.set_xticklabels(labels = labels)
-    plt.tight_layout()
-    plt.savefig('plots/' + title_text + ' Slide 11.png', bbox_inches='tight')
-
-    # ====================================================================
-    #         #Age  SLIDE 12
-    # ====================================================================
-    op_data_temp_age = df.copy()
-    #group ages in age bands (-1 not 0 to include babies)
-    age_list = ['0-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79',
-                '80+']
-    op_data_temp_age['value'] = pd.cut(x=op_data_temp_age['Age'],
-                                   bins=[-1, 19, 29, 39, 49, 59, 69, 79, 120],
-                                   labels=age_list)
-    #Make a plot of the proportions
-    fig1, ax_op_age=plt.subplots(1, 1, figsize = (7,5))
-    sns.histplot(data=op_data_temp_age.sort_values('value'), x='value',
-                 hue="Visit", hue_order=hue_order, multiple="fill",
-                 discrete=True, palette=['lemonchiffon','orange'], alpha=1,
-                 ax=ax_op_age)
-    #Make a list of the numbers to include under the percentages
-    nonf2f_counts = op_data_temp_age.loc[op_data_temp_age['Visit'] == 'Non-F2F',
-                                         'value'].value_counts()
-    num_list = [nonf2f_counts[band] if band in nonf2f_counts.index else 0
-                for band in age_list]
-    counts = op_data_temp_age['value'].value_counts()
-    tot_list = [counts[band] if band in counts.index
-                else 0 for band in age_list]
-    show_values_on_bars(ax_op_age,rounded=0,
-                        numbers = [j for j in num_list if j!=0])
-    show_totals(ax_op_age, tot_list)
-    ax_op_age.yaxis.set_major_formatter(PercentFormatter(1))
-    ax_op_age.set_xlabel('Age')
-    ax_op_age.set_ylabel('Percentage of ' + title_text)
-    legend = ax_op_age.get_legend()
-    # #Get seaborn legend
-    handles = legend.legend_handles
-    ax_op_age.legend(handles, hue_order, title='Appointment Type',
-                     bbox_to_anchor=(1,1))
-    plt.savefig('plots/' + title_text + ' Slide 12.png', bbox_inches='tight')
-
-    #Hypothesis testing for age bands - only if looking at all appts
-    if i==0:
-        #Get all pairs of decile numbers with no repeats
-        age_pvals = []
-        for r in itertools.combinations(range(len(age_list)),2):
-            pval = propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
-                                      num_list[r[1]]/tot_list[r[1]],
-                                      num_list[r[0]], num_list[r[1]])
-            #Record NON statistically significant results (as shorter to write)
-            if pval > 0.025:
-                age_pvals.append([r, pval])
+        spec_me_nf2f_perc.append(100*(numbers[1]/totals[1]))
     
-        #Make a df of the results
-        age_prop_test = pd.DataFrame(age_pvals, columns=['pairs', 'pval'])
-        age_prop_test['age1'] = (age_prop_test['pairs']
-                                 .apply(lambda x: age_list[x[0]]))
-        age_prop_test['age2'] = (age_prop_test['pairs']
-                                 .apply(lambda x: age_list[x[1]]))
-    
-        #write a string of the age pairs that have a significant difference
-        pairs = (age_prop_test.groupby('age1', as_index=False)['age2']
-                 .apply(list).values.tolist())
-        slide12_text = ''
-        for pair in pairs:
-            string = f'{pair[0]} & {pair[1][0]}\n'
-            slide12_text += string
+    #If no non-F2F patients are seen in either or both ethnicity categories, 
+    #cannot perform hypothesis test
+    if ((all(j > 50 for j in numbers)) or
+        ((all(j > 50 for j in totals))and (all(j > 0 for j in numbers)))):
+        spec_eth_pvals.append(propHypothesisTest(numbers[0]/totals[0],
+                                                    numbers[1]/totals[1],
+                                                    numbers[0], numbers[1],
+                                                    alpha=0.025))
+    else:
+        spec_eth_pvals.append(None)
+#create dataframe
+spec_eth_pvals = pd.DataFrame({'Specialty':spec_unique,
+                                'p-value':spec_eth_pvals,
+                                'WB Non-F2F Perc':spec_wb_nf2f_perc,
+                                'EM Non-F2F Perc':spec_me_nf2f_perc,
+                                'WB F2F':n_wb_f2f, 'WB NF2F':n_wb_nf2f,
+                                'EM F2F':n_me_f2f, 'EM NF2F':n_me_nf2f})
+spec_eth_pvals['WB-EM NonF2F Perc'] = (spec_eth_pvals['WB Non-F2F Perc']
+                                        - spec_eth_pvals['EM Non-F2F Perc'])
+#Barplot
+nf2f_eth_slc_plt = pd.melt(spec_eth_pvals[spec_eth_pvals['p-value']<0.025]
+                            .sort_values('WB-EM NonF2F Perc'),
+                            id_vars=['Specialty'],
+                            value_vars = ['EM Non-F2F Perc',
+                                            'WB Non-F2F Perc'])
+fig, ax_nf2fspec_eth = plt.subplots(1,1,figsize=(9,4))
+sns.barplot(data=nf2f_eth_slc_plt, x='Specialty', hue='variable', y='value',
+            ax=ax_nf2fspec_eth, palette=['royalblue','lightskyblue'])
+legend = ax_nf2fspec_eth.get_legend()
+#Get seaborn legend
+handles = legend.legend_handles
+ax_nf2fspec_eth.legend(handles, ['Ethnic Minority', 'White British'],
+                        bbox_to_anchor=(1,1))
+if title_text == 'Outpatients':
+    ax_nf2fspec_eth.set_ylabel(tw.fill('Percentage of ' + title_text
+                                        + ' seen non-F2F', 40))
+else:
+    ax_nf2fspec_eth.set_ylabel(tw.fill('Percentage of ' + title_text
+                                        + ' carried out non-F2F', 40))
+ax_nf2fspec_eth.set_xticks(ax_nf2fspec_eth.get_xticks())
+labels = [tw.fill(l, 16) for l in nf2f_eth_slc_plt.Specialty.unique()]
+ax_nf2fspec_eth.set_xticklabels(labels = labels)
+plt.tight_layout()
+plt.savefig('plots/' + title_text + ' Slide 11.png', bbox_inches='tight')
+
+# ====================================================================
+#         #Age  SLIDE 12
+# ====================================================================
+op_data_temp_age = op_data.copy()
+#group ages in age bands (-1 not 0 to include babies)
+age_list = ['0-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79',
+            '80+']
+op_data_temp_age['value'] = pd.cut(x=op_data_temp_age['Age'],
+                                bins=[-1, 19, 29, 39, 49, 59, 69, 79, 120],
+                                labels=age_list)
+#Make a plot of the proportions
+fig1, ax_op_age=plt.subplots(1, 1, figsize = (7,5))
+sns.histplot(data=op_data_temp_age.sort_values('value'), x='value',
+                hue="Visit", hue_order=hue_order, multiple="fill",
+                discrete=True, palette=['lemonchiffon','orange'], alpha=1,
+                ax=ax_op_age)
+#Make a list of the numbers to include under the percentages
+nonf2f_counts = op_data_temp_age.loc[op_data_temp_age['Visit'] == 'Non-F2F',
+                                        'value'].value_counts()
+num_list = [nonf2f_counts[band] if band in nonf2f_counts.index else 0
+            for band in age_list]
+counts = op_data_temp_age['value'].value_counts()
+tot_list = [counts[band] if band in counts.index
+            else 0 for band in age_list]
+show_values_on_bars(ax_op_age,rounded=0,
+                    numbers = [j for j in num_list if j!=0])
+show_totals(ax_op_age, tot_list)
+ax_op_age.yaxis.set_major_formatter(PercentFormatter(1))
+ax_op_age.set_xlabel('Age')
+ax_op_age.set_ylabel('Percentage of ' + title_text)
+legend = ax_op_age.get_legend()
+# #Get seaborn legend
+handles = legend.legend_handles
+ax_op_age.legend(handles, hue_order, title='Appointment Type',
+                    bbox_to_anchor=(1,1))
+plt.savefig('plots/' + title_text + ' Slide 12.png', bbox_inches='tight')
+
+#Hypothesis testing for age bands
+#Get all pairs of decile numbers with no repeats
+age_pvals = []
+for r in itertools.combinations(range(len(age_list)),2):
+    pval = propHypothesisTest(num_list[r[0]]/tot_list[r[0]],
+                                num_list[r[1]]/tot_list[r[1]],
+                                num_list[r[0]], num_list[r[1]])
+    #Record NON statistically significant results (as shorter to write)
+    if pval > 0.025:
+        age_pvals.append([r, pval])
+
+#Make a op_data of the results
+age_prop_test = pd.DataFrame(age_pvals, columns=['pairs', 'pval'])
+age_prop_test['age1'] = (age_prop_test['pairs']
+                            .apply(lambda x: age_list[x[0]]))
+age_prop_test['age2'] = (age_prop_test['pairs']
+                            .apply(lambda x: age_list[x[1]]))
+
+#write a string of the age pairs that have a significant difference
+pairs = (age_prop_test.groupby('age1', as_index=False)['age2']
+            .apply(list).values.tolist())
+slide12_text = ''
+for pair in pairs:
+    string = f'{pair[0]} & {pair[1][0]}\n'
+    slide12_text += string
 
 # =============================================================================
 # #DM01 Queries
