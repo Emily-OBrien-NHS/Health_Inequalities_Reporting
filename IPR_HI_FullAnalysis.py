@@ -15,7 +15,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 import time
 import os
-os.chdir('C:/Users/obriene/Projects/Health Inequalities Reporting')
+os.chdir('C:/Users/obriene/Projects/Health_Inequalities_Reporting')
 
 #Get the current month and year for outputs
 current_day = dt.datetime.today()
@@ -24,7 +24,7 @@ version_date = f'{current_day.strftime("%b")} {current_day.year}'
 end_date = (current_day.replace(day=1)
             - dt.timedelta(days=1))
 start_date = end_date - relativedelta(years=1)
-op_end_date = f'{end_date.strftime('%d-%B-%Y').upper()} 23:59:59'
+op_end_date = f"{end_date.strftime('%d-%B-%Y').upper()} 23:59:59"
 
 # =============================================================================
 # % Get data from queries
