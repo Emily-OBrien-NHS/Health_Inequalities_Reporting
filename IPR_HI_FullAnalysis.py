@@ -460,7 +460,7 @@ rtt_low_imd_slc_plt = pd.melt(RTT_LOW_IMDSLC_pvals.loc[
     RTT_LOW_IMDSLC_pvals['p-value'] < 0.025], id_vars=['SLC'],
     value_vars = ['Median LoW IMD 1-2', 'Median LoW IMD 3-10'])
 #plot
-fig, ax_spec_imd = plt.subplots(1,1,figsize = (8,4))
+fig, ax_spec_imd = plt.subplots(1,1,figsize = (9,4))
 sns.barplot(data=rtt_low_imd_slc_plt, x='SLC', hue='variable', y='value',
             ax=ax_spec_imd, palette=['seagreen','lightgreen'])
 legend = ax_spec_imd.get_legend()
@@ -710,7 +710,7 @@ else:
     ax_nf2fspec_imd2.set_ylabel(tw.fill('Percentage of ' + title_text
                                         + ' carried out non-F2F',40))
 ax_nf2fspec_imd2.set_xticks(ax_nf2fspec_imd2.get_xticks())
-labels = [tw.fill(l, 16) for l
+labels = [tw.fill(l, 12) for l
             in nf2f_imd2_spec_plt.sort_values('diffs')['Specialty'].unique()]
 ax_nf2fspec_imd2.set_xticklabels(labels = labels)
 plt.tight_layout()
