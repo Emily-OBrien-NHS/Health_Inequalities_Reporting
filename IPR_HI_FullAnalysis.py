@@ -15,7 +15,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 import time
 import os
-os.chdir('C:/Users/obriene/Projects/Health_Inequalities_Reporting')
+os.chdir('C:/Users/obriene/Projects/Inequalities/Health Inequalities Reporting')
 
 #Get the current month and year for outputs
 current_day = dt.datetime.today()
