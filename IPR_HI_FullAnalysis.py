@@ -10,6 +10,7 @@ import matplotlib.dates as mdates
 import scipy.stats.distributions as dist
 import datetime as dt
 import itertools
+import win32com.client as win32
 from dateutil.relativedelta import relativedelta
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -2428,3 +2429,21 @@ prs.save(f'G:/PerfInfo/Performance Management/PIT Adhocs/2025-2026/Emily 2526/He
 print('Presentation created')
 t5 = time.time()
 print(f'Total run time {(t5-t0)/60} mins')
+
+################################################################################
+                                #Send Email#
+################################################################################
+#send email with latest flagged output attatched    
+# Create Outlook application object and mail item
+outlook = win32.Dispatch('outlook.application')
+mail = outlook.CreateItem(0)    
+# Set email properties
+mail.To = open('C:/Users/obriene/Projects/Inequalities/Health Inequalities Reporting/emails.txt', 'r').read()
+#mail.To = 'e.obrien6@nhs.net'
+mail.Subject = 'Health Inequalities'
+mail.Body = """Hi Mike,\n
+The latest health inequalities powerpoint is here: G:\PerfInfo\Performance Management\PIT Adhocs\2025-2026\Emily 2526\Health Inequalities ppts \n
+Emily"""
+# Send email
+mail.Send()
+print(f"Email sent successfully")
