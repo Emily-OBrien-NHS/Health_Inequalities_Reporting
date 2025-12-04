@@ -2438,8 +2438,7 @@ print(f'Total run time {(t5-t0)/60} mins')
 outlook = win32.Dispatch('outlook.application')
 mail = outlook.CreateItem(0)    
 # Set email properties
-#mail.To = open('C:/Users/obriene/Projects/Inequalities/Health Inequalities Reporting/emails.txt', 'r').read()
-mail.To = 'e.obrien6@nhs.net'
+mail.To = open('G:/PerfInfo/Performance Management/OR Team/Emily Projects/Inequalities/Health Inequalities Reporting/emails.txt', 'r').read()
 mail.Subject = 'Health Inequalities'
 mail.Body = """Hi Mike,\n
 The latest health inequalities powerpoint is here: G:\PerfInfo\Performance Management\PIT Adhocs\2025-2026\Emily 2526\Health Inequalities ppts \n
