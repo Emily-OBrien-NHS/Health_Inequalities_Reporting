@@ -16,7 +16,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 import time
 import os
-os.chdir('G:\PerfInfo\Performance Management\OR Team\Emily Projects\Inequalities\Health Inequalities Reporting')
+os.chdir(r'G:\PerfInfo\Performance Management\OR Team\Emily Projects\Inequalities\Health Inequalities Reporting')
 
 #Get the current month and year for outputs
 current_day = dt.datetime.today()
@@ -2425,7 +2425,7 @@ font = run.font
 font.size = Pt(24)
 
 ####SAVE FILE
-prs.save(f'G:/PerfInfo/Performance Management/PIT Adhocs/2025-2026/Emily 2526/Health Inequalities ppts/Health Inequalities Data {version_date}.pptx')
+prs.save(rf'G:/PerfInfo/Performance Management/PIT Adhocs/2025-2026/Emily 2526/Health Inequalities ppts/Health Inequalities Data {version_date}.pptx')
 print('Presentation created')
 t5 = time.time()
 print(f'Total run time {(t5-t0)/60} mins')
@@ -2438,9 +2438,9 @@ print(f'Total run time {(t5-t0)/60} mins')
 outlook = win32.Dispatch('outlook.application')
 mail = outlook.CreateItem(0)    
 # Set email properties
-mail.To = open('G:/PerfInfo/Performance Management/OR Team/Emily Projects/Inequalities/Health Inequalities Reporting/emails.txt', 'r').read()
+mail.To = open(r'G:/PerfInfo/Performance Management/OR Team/Emily Projects/Inequalities/Health Inequalities Reporting/emails.txt', 'r').read()
 mail.Subject = 'Health Inequalities'
-mail.Body = """Hi Mike,\n
+mail.Body = r"""Hi Mike,\n
 The latest health inequalities powerpoint is here: G:\PerfInfo\Performance Management\PIT Adhocs\2025-2026\Emily 2526\Health Inequalities ppts \n
 Emily"""
 # Send email
