@@ -13,6 +13,12 @@
 #any word files
 *.docx
 
+#any SQL files
+*.sql
+
+#sql folder
+Epic queries/
+
 #plots folder
 plots/
 
@@ -21,3 +27,4 @@ outputs/
 
 #Emails file
 emails.txt
+uhpbi conn string.txt
