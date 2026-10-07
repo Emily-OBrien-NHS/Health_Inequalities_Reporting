@@ -19,11 +19,12 @@
 #sql folder
 Epic queries/
 
-#plots folder
-plots/
+#Papers folder
+TMB Papers/
 
 #outputs
-outputs/
+Old Versions/outputs/
+Old Versions/plots/
 
 #Emails file
 emails.txt

@@ -41,7 +41,7 @@ def data_cleaning(df):
 # =============================================================================
 
 t0 = time.time()     
-conn_str = open('G:/PerfInfo/Performance Management/OR Team/Emily Projects/Inequalities/Health Inequalities Reporting/uhpbi conn string.txt', 'r')
+conn_str = open('G:/PerfInfo/Performance Management/OR Team/Useful Files/uhpbi conn string.txt', 'r')
 uhpbi_engine = create_engine(conn_str.read())
 conn_str.close()
 
