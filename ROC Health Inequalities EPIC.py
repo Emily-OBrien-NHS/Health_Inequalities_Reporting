@@ -95,6 +95,13 @@ baby_37w_query.close()
 print('Babies <37 weeks')
 
 # ===============================
+# My Chart Uptake
+mychart_query = open('G:/PerfInfo/Performance Management/OR Team/Emily Projects/Inequalities/Health Inequalities Reporting/EPIC queries/My Chart Uptake.sql', 'r')
+mychart = data_cleaning(pd.read_sql_query(mychart_query.read(), uhpbi_engine))
+mychart_query.close()
+print('MyChart')
+
+# ===============================
 # Dispose connection
 t1 = time.time()
 print(f'Data read successfully in {t1-t0}')
@@ -102,7 +109,7 @@ uhpbi_engine.dispose()
 #sdmart_engine.dispose()
 # =============================================================================
 
-SLs = pd.Series(rtt_low['SL'].tolist() + rtt_incomp['SL'].tolist() + OP_dna['SL'].tolist() + F2F['SL'].tolist()).drop_duplicates().dropna().sort_values().tolist()
+SLs = pd.Series(rtt_low['SL'].tolist() + rtt_incomp['SL'].tolist() + OP_dna['SL'].tolist() + F2F['SL'].tolist() + mychart['SL'].tolist()).drop_duplicates().dropna().sort_values().tolist()
 # =============================================================================
 # =============================================================================
 # Functions
@@ -271,12 +278,12 @@ def create_plot(title, cat_str, sl, values, totals, pvals, perc):
            color = ['royalblue','lightskyblue','seagreen','lightgreen', 'purple', 'orchid'],
            edgecolor='black')
     ax.set_xticks([1,2,3,4,5,6])
-    ax.set_xticklabels([f'Ethnic\n Minority\n({totals[0]:,.0f}\nappointments)',
-                        f'White British\n({totals[1]:,.0f}\nappointments)',
-                        f'IMD 1-2\n({totals[2]:,.0f}\nappointments)',
-                        f'IMD 3-10\n({totals[3]:,.0f}\nappointments)',
-                        f'Female\n({totals[4]:,.0f}\nappointments)',
-                        f'Male\n({totals[5]:,.0f}\nappointments)'])
+    ax.set_xticklabels([f'Ethnic\n Minority\n({totals[0]:,.0f})',
+                        f'White British\n({totals[1]:,.0f})',
+                        f'IMD 1-2\n({totals[2]:,.0f})',
+                        f'IMD 3-10\n({totals[3]:,.0f})',
+                        f'Female\n({totals[4]:,.0f})',
+                        f'Male\n({totals[5]:,.0f})'])
     ax.set_ylabel(cat_str)
     ax.set_title(title)
     show_values_on_bars(ax, percentage=perc, multiply=False)
@@ -340,6 +347,11 @@ baby_37w['Category'] = baby_37w['Gestation <37 weeks'].copy()
 baby_values, baby_totals, baby_pvals = prop_vals(baby_37w, 'Yes')
 baby_lst = create_plot('Babies born under 37 Weeks Gestation', 'proportion of babies', np.nan, baby_values, baby_totals, baby_pvals, True)
 
+############MyChart Update
+mychart_lst = []
+mychart_values, mychart_totals, mychart_pvals = prop_vals(mychart.drop_duplicates(subset='NHS_number'), 'Activated')
+mychart_lst.append(create_plot('MyChart Uptake', 'rate of MyChart uptake', np.nan, mychart_values, mychart_totals, mychart_pvals, True))
+
 ###########Service Line Plots
 for sl in SLs:
     #create directory if doesn't exist
@@ -359,6 +371,10 @@ for sl in SLs:
     #F2F Appts
     F2F_values, F2F_totals, F2F_pvals = prop_vals(F2F.loc[F2F['SL'] == sl].copy(), 'Non-F2F')
     F2F_lst.append(create_plot('Non-F2F Appointments', 'Non-F2F appt rate', sl, F2F_values, F2F_totals, F2F_pvals, True))
+    #My Chart Uptake
+    mychart_values, mychart_totals, mychart_pvals = prop_vals(mychart.loc[mychart['SL'] == sl], 'Activated')
+    mychart_lst.append(create_plot('MyChart Uptake', 'rate of MyChart uptake', sl, mychart_values, mychart_totals, mychart_pvals, True))
+
 
 #copy and paste the gestation plot into the maternity folder.
 shutil.copy(r'G:\FBM\Operational Research\Health Inequalities\Plots\_ALL\Babies born under 37 Weeks Gestation.png',
@@ -386,11 +402,11 @@ RTT_52w = pd.DataFrame(rtt_52ww_lst, columns=df_cols)
 OP_dnas = pd.DataFrame(OP_dnas_lst, columns=df_cols)
 F2F_apt = pd.DataFrame(F2F_lst, columns=df_cols)
 baby_37 = pd.DataFrame([baby_lst], columns=df_cols)
-
+mychart = pd.DataFrame(mychart_lst, columns=df_cols)
 # =============================================================================
 # SUMMARY DF
 combined_cols = ['Service Line', 'Ethnicity', 'IMD', 'Sex']
-dfs = [RTT_LoW, RTT_52w, F2F_apt, OP_dnas]#, IP_dnas]
+dfs = [RTT_LoW, RTT_52w, F2F_apt, OP_dnas, mychart]#, IP_dnas]
 new_dfs = []
 new_cols = []
 for df in dfs:
@@ -437,6 +453,9 @@ DNA_sum = pd.DataFrame([IP_dnas_sum, OP_dnas_sum])
 baby_37_sum = pd.DataFrame(baby_37.loc[0, combined_cols[1:]].replace(replace)
                .fillna(nd).rename('Proportion of babies born under 27 weeks gestation')).T
 
+#MyChart
+mychart_sum = pd.DataFrame(mychart.loc[0, combined_cols[1:]].replace(replace)
+                           .fillna(nd).rename('MyChart Uptake')).T
 
 # =============================================================================
 # SUMMARY BULLET POINTS
@@ -452,7 +471,7 @@ def headline_str(df, name, headline):
     #Data frame of all the constituent string parts
     sigs = df[df != 'No Difference'].dropna(axis=1).T.reset_index()
     sigs.columns = ['index', 'value']
-    sigs['pat'] = sigs['index'].str.replace(replace, regex=True)
+    sigs['pat'] = sigs['index'].replace(replace, regex=True)
     sigs['type'] = sigs['value'].str.split(' ').str[-1].str.lower()
     sigs['name'] = name
     if headline:
@@ -473,7 +492,8 @@ sigs = pd.concat([
                 headline_str(F2F_sum, 'proportion of non-face-to-face-appointments', True),
                 #headline_str(pd.DataFrame(IP_dnas_sum), 'Inpatient DNA rate', False),
                 headline_str(pd.DataFrame(OP_dnas_sum).T, 'Outpatient DNA rate', False),
-                headline_str(baby_37_sum, 'proportion of babies born at <37 weeks', False)])
+                headline_str(baby_37_sum, 'proportion of babies born at <37 weeks', False),
+                headline_str(pd.DataFrame(mychart_sum), 'MyChart Uptake', False)])
 
 head = sigs.loc[sigs['headline']].groupby(['name', 'type'], as_index=False)['pat'].agg(lambda x: join_and(x))
 head['string'] = 'Significantly ' + head['type'] + ' ' + head['name'] + ' for ' + head['pat'] + ' patients'
@@ -550,11 +570,11 @@ with pd.ExcelWriter(f'Tables/HI Summary Table - {version_date}.xlsx', engine='xl
         worksheet.set_column(col, col, 12, r_border) #results formatting
     worksheet.set_column(1, 1, 45, service_line)  # Service Line
     #merge around edge
-    worksheet.merge_range(0, 0, 0, 14, "", b_border)
+    worksheet.merge_range(0, 0, 0, 18, "", b_border)
     end = len(combination_df) + 3
     worksheet.merge_range(1, 0, end-1, 0, "", r_border)
-    worksheet.merge_range(end, 0, end, 14, "", t_border)
-    worksheet.merge_range(1, 14, end-1, 14, "")
+    worksheet.merge_range(end, 0, end, 18, "", t_border)
+    worksheet.merge_range(1, 17, end-1, 18, "")
 
 
 # =============================================================================
@@ -612,10 +632,11 @@ with pd.ExcelWriter(f'Tables/HI Summary Table - {version_date}.xlsx', engine='xl
     write_block(6, F2F_sum)
     write_block(10, DNA_sum)
     write_block(15, baby_37_sum)
+    write_block(19, mychart_sum)
 
     wrap = workbook.add_format({'text_wrap': True})
     worksheet.merge_range(3, 6, 10, 10, headline_string, wrap)
-    worksheet.merge_range(13, 6, 20, 10, new_string, wrap)
+    worksheet.merge_range(19, 6, 20, 10, new_string, wrap)
 
 # =============================================================================
 #other sheets
@@ -625,6 +646,7 @@ with pd.ExcelWriter(f'Tables/HI Summary Table - {version_date}.xlsx', engine='xl
     OP_dnas.to_excel(writer, sheet_name='Outpatient DNAs', index=False)
     F2F_apt.to_excel(writer, sheet_name='Non F2F Appts', index=False)
     baby_37.to_excel(writer, sheet_name='Babies <37 Weeks', index=False)
+    mychart.to_excel(writer, sheet_name='MyChart Uptake', index=False)
 
 t2 = time.time()
 print(f'complete in {t2-t0}')
